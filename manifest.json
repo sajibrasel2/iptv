@@ -1,4 +1,5 @@
 {
+  "id": "/iptv/",
   "name": "Tech & Click TV",
   "short_name": "T&C TV",
   "description": "Watch live sports, TV channels, and more!",
@@ -10,22 +11,29 @@
   "icons": [
     {
       "src": "t&c.png",
-      "sizes": "192x192",
+      "sizes": "1254x766",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
       "src": "t&c.png",
-      "sizes": "512x512",
+      "sizes": "any",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ],
   "screenshots": [
     {
       "src": "t&c.png",
-      "sizes": "1080x1920",
-      "type": "image/png"
+      "sizes": "1254x766",
+      "type": "image/png",
+      "form_factor": "wide"
+    },
+    {
+      "src": "t&c.png",
+      "sizes": "1254x766",
+      "type": "image/png",
+      "form_factor": "narrow"
     }
   ]
 }
