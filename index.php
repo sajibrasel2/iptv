@@ -64,7 +64,7 @@
         }
     </style>
     <!-- Monetag MultiTag -->
-    <script src="https://quge5.com/88/tag.min.js" data-zone="249976" async data-cfasync="false"></script>
+
 </head>
 <body class="bg-black text-slate-100 min-h-screen font-sans antialiased selection:bg-indigo-500 selection:text-white flex justify-center">
 
