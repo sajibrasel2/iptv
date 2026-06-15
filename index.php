@@ -221,6 +221,15 @@
             // 3. Redirect the CURRENT tab to the monetized Ad URL
             window.location.href = adUrl;
         }
+
+        // Service Worker Registration
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/iptv/sw.js')
+                    .then(registration => console.log('Service Worker registered successfully:', registration.scope))
+                    .catch(error => console.log('Service Worker registration failed:', error));
+            });
+        }
     </script>
 </body>
 </html>

@@ -1,6 +1,8 @@
 {
   "name": "Tech & Click TV",
   "short_name": "T&C TV",
+  "description": "Watch live sports, TV channels, and more!",
+  "orientation": "portrait",
   "start_url": "/iptv/",
   "display": "standalone",
   "background_color": "#0f172a",
@@ -9,11 +11,20 @@
     {
       "src": "t&c.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "t&c.png",
       "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "t&c.png",
+      "sizes": "1080x1920",
       "type": "image/png"
     }
   ]
