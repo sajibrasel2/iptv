@@ -2,10 +2,7 @@
 // api_dynamic.php
 header('Content-Type: application/json');
 
-$servername = "localhost";
-$username = "root";
-$password = "";
-$dbname = "livetv_db";
+require_once 'config.php';
 
 $response = [
     'channels' => [],
@@ -13,7 +10,7 @@ $response = [
 ];
 
 try {
-    $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+    $conn = new PDO("mysql:host=$servername;dbname=$dbname;charset=$charset", $username, $password);
     $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     // Fetch channels
