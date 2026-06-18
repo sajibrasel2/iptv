@@ -173,7 +173,7 @@ header("Expires: 0");
         </main>
 
         <!-- Banner Ad -->
-        <div class="ad-banner-container flex justify-center my-2 overflow-hidden">
+        <div class="flex justify-center my-2">
             <script type="text/javascript">
               atOptions = {
                 'key' : '3ca358c9ad7530f34af0e7de8e9d6a3b',
