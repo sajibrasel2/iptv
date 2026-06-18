@@ -1,16 +1,1 @@
-(function() {
-    var a = '\u0061\u0074\u004f\u0070\u0074\u0069\u006f\u006e\u0073';
-    var options = {
-        'key' : '3ca358c9ad7530f34af0e7de8e9d6a3b',
-        'format' : 'iframe',
-        'height' : 60,
-        'width' : 468,
-        'params' : {}
-    };
-    window[a] = options;
-    
-    var s = document.createElement('\u0073\u0063\u0072\u0069\u0070\u0074');
-    s.type = '\u0074\u0065\u0078\u0074\u002f\u006a\u0061\u0076\u0061\u0073\u0063\u0072\u0069\u0070\u0074';
-    s.src = '\u0068\u0074\u0074\u0070\u0073\u003a\u002f\u002f\u0077\u0077\u0077\u002e\u0068\u0069\u0067\u0068\u0070\u0065\u0072\u0066\u006f\u0072\u006d\u0061\u006e\u0063\u0065\u0066\u006f\u0072\u006d\u0061\u0074\u002e\u0063\u006f\u006d\u002f\u0033\u0063\u0061\u0033\u0035\u0038\u0063\u0039\u0061\u0064\u0037\u0035\u0033\u0030\u0066\u0033\u0034\u0061\u0066\u0030\u0065\u0037\u0064\u0065\u0038\u0065\u0039\u0064\u0036\u0061\u0033\u0062\u002f\u0069\u006e\u0076\u006f\u006b\u0065\u002e\u006a\u0073';
-    document.body.appendChild(s);
-})();
+(function(s){s.dataset.zone='11167304';s.src='https://n6wxm.com/vignette.min.js';([document.documentElement, document.body].filter(Boolean).pop().appendChild(s))})(document.createElement('script'));
