@@ -1,3 +1,9 @@
+<?php
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Cache-Control: post-check=0, pre-check=0", false);
+header("Pragma: no-cache");
+header("Expires: 0");
+?>
 <!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -134,8 +140,8 @@
             const loading = document.getElementById('loading');
             
             try {
-                // Fetch dynamic data from API
-                const response = await fetch('api_dynamic.php');
+                // Fetch dynamic data from API with cache-busting parameter
+                const response = await fetch('api_dynamic.php?t=' + Date.now());
                 const data = await response.json();
                 
                 const sites = data.channels || [];
@@ -226,7 +232,11 @@
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('/iptv/sw.js')
-                    .then(registration => console.log('Service Worker registered successfully:', registration.scope))
+                    .then(registration => {
+                        console.log('Service Worker registered successfully:', registration.scope);
+                        // Check for updates on every page load
+                        registration.update();
+                    })
                     .catch(error => console.log('Service Worker registration failed:', error));
             });
         }

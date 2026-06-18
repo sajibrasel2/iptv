@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tc-tv-cache-v1';
+const CACHE_NAME = 'tc-tv-cache-v2';
 const urlsToCache = [
   '/iptv/',
   '/iptv/index.php',
@@ -18,30 +18,57 @@ self.addEventListener('install', event => {
   self.skipWaiting();
 });
 
-// Fetch event - Serve from cache, fallback to network
+// Fetch event - Cache-busting logic and smart routing
 self.addEventListener('fetch', event => {
-  // Only cache GET requests
+  // Only handle GET requests
   if (event.request.method !== 'GET') return;
 
+  const url = new URL(event.request.url);
+
+  // 1. Dynamic API: Bypass caching entirely (Network-Only)
+  if (url.pathname.includes('api_dynamic.php')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  // 2. HTML and Documents: Network-First strategy
+  if (event.request.mode === 'navigate' || event.request.headers.get('accept').includes('text/html')) {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          // If valid response, update cache
+          if (response && response.status === 200) {
+            const responseToCache = response.clone();
+            caches.open(CACHE_NAME).then(cache => {
+              cache.put(event.request, responseToCache);
+            });
+          }
+          return response;
+        })
+        .catch(() => {
+          // Fallback to cache if offline
+          return caches.match(event.request);
+        })
+    );
+    return;
+  }
+
+  // 3. Static Assets: Cache-First strategy (with network fallback)
   event.respondWith(
     caches.match(event.request)
       .then(response => {
-        // Cache hit - return response
         if (response) {
           return response;
         }
         
-        // Clone the request for network fetch
         const fetchRequest = event.request.clone();
 
         return fetch(fetchRequest).then(
           response => {
-            // Check if we received a valid response
-            if(!response || response.status !== 200 || response.type !== 'basic') {
+            if (!response || response.status !== 200 || response.type !== 'basic') {
               return response;
             }
 
-            // Clone the response for caching
             const responseToCache = response.clone();
 
             caches.open(CACHE_NAME)
@@ -64,6 +91,7 @@ self.addEventListener('activate', event => {
       return Promise.all(
         cacheNames.map(cacheName => {
           if (cacheWhitelist.indexOf(cacheName) === -1) {
+            console.log('Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
