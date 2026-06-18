@@ -76,6 +76,18 @@ header("Expires: 0");
             background-color: #1a1e29;
         }
 
+        .ad-banner-container {
+            position: fixed;
+            bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 448px;
+            z-index: 9998;
+            background-color: #1a1e29;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
         @keyframes shimmer {
             100% { transform: translateX(100%); }
         }
@@ -96,7 +108,7 @@ header("Expires: 0");
         </header>
 
         <!-- Main Content Area -->
-        <main class="flex-1 overflow-y-auto p-4 pb-24 space-y-4 relative">
+        <main class="flex-1 overflow-y-auto p-4 pb-40 space-y-4 relative">
             <!-- Background ambient glow -->
             <div class="absolute top-0 left-1/2 -translate-x-1/2 w-full h-64 bg-indigo-500/10 blur-[80px] rounded-full pointer-events-none"></div>
             
@@ -159,6 +171,20 @@ header("Expires: 0");
                 </div>
             </div>
         </main>
+
+        <!-- Banner Ad -->
+        <div class="ad-banner-container flex justify-center my-2 overflow-hidden">
+            <script type="text/javascript">
+              atOptions = {
+                'key' : '3ca358c9ad7530f34af0e7de8e9d6a3b',
+                'format' : 'iframe',
+                'height' : 60,
+                'width' : 468,
+                'params' : {}
+              };
+            </script>
+            <script type="text/javascript" src="https://www.highperformanceformat.com/3ca358c9ad7530f34af0e7de8e9d6a3b/invoke.js"></script>
+        </div>
 
         <!-- Bottom Navigation -->
         <nav id="bottom-nav" class="border-t border-white/5 pb-safe">
