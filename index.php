@@ -65,6 +65,17 @@ header("Expires: 0");
             padding-bottom: env(safe-area-inset-bottom, 16px);
         }
         
+        #bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 448px; /* max-w-md matching wrapper */
+            z-index: 9999;
+            background-color: #1a1e29;
+        }
+
         @keyframes shimmer {
             100% { transform: translateX(100%); }
         }
@@ -85,23 +96,75 @@ header("Expires: 0");
         </header>
 
         <!-- Main Content Area -->
-        <main class="flex-1 overflow-y-auto p-4 pb-6 space-y-4 relative" id="cards-container">
+        <main class="flex-1 overflow-y-auto p-4 pb-24 space-y-4 relative">
             <!-- Background ambient glow -->
             <div class="absolute top-0 left-1/2 -translate-x-1/2 w-full h-64 bg-indigo-500/10 blur-[80px] rounded-full pointer-events-none"></div>
             
-            <!-- Loading Indicator -->
-            <div id="loading" class="flex justify-center items-center py-10">
-                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
+            <!-- Home Section -->
+            <div id="home-section" class="space-y-4">
+                <!-- Loading Indicator -->
+                <div id="loading" class="flex justify-center items-center py-10">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
+                </div>
+                <!-- Cards injected dynamically by JS -->
+                <div id="cards-container" class="space-y-4"></div>
             </div>
-            
-            <!-- Cards injected dynamically by JS -->
+
+            <!-- Favorites Section (Hidden by default) -->
+            <div id="favorites-section" class="hidden space-y-4">
+                <h2 class="text-2xl font-bold text-white mb-2">My Favorites</h2>
+                <div id="favorites-container" class="space-y-4">
+                    <p class="text-center text-slate-400 py-10">You haven't added any channels to favorites yet.</p>
+                </div>
+            </div>
+
+            <!-- Profile Section (Hidden by default) -->
+            <div id="profile-section" class="hidden space-y-6">
+                <!-- User Profile Header -->
+                <div class="flex flex-col items-center py-6 border-b border-white/5 space-y-3">
+                    <div class="w-20 h-20 rounded-full bg-gradient-to-tr from-indigo-500 to-cyan-500 flex items-center justify-center text-3xl font-bold text-white shadow-lg">
+                        U
+                    </div>
+                    <div class="text-center">
+                        <h2 class="text-xl font-bold text-white">Guest User</h2>
+                        <p class="text-xs text-slate-400">IPTV Hub Member</p>
+                    </div>
+                </div>
+
+                <!-- Telegram Community Card -->
+                <div class="relative group bg-slate-800/40 p-[1px] rounded-2xl overflow-hidden transition-all duration-300 border border-indigo-500/30 hover:shadow-[0_8px_30px_rgba(99,102,241,0.15)]">
+                    <div class="absolute inset-0 bg-gradient-to-br from-indigo-500/20 via-purple-500/5 to-transparent pointer-events-none"></div>
+                    <div class="relative bg-slate-800/90 backdrop-blur-sm rounded-[15px] p-5 space-y-4">
+                        <div class="flex items-center space-x-3">
+                            <div class="p-2.5 rounded-xl bg-cyan-500/10 text-cyan-400">
+                                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.11.02-1.89 1.2-5.34 3.53-.51.35-.97.52-1.37.51-.45-.01-1.31-.25-1.95-.46-.78-.25-1.4-.39-1.35-.83.03-.23.35-.46.96-.69 3.77-1.64 6.29-2.72 7.56-3.25 3.6-.5 4.35-.59 4.84-.59.11 0 .35.03.5.15.13.12.17.27.18.39.02.08.02.2-.02.34z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-bold text-white">Join Telegram Channel</h3>
+                                <p class="text-xs text-cyan-400">@getlatestmovienew</p>
+                            </div>
+                        </div>
+                        <p class="text-sm text-slate-300 leading-relaxed">
+                            Stay connected! Join our official Telegram channel to receive instant app updates, premium features, and daily live match schedules.
+                        </p>
+                        <a href="https://t.me/getlatestmovienew" target="_blank" rel="noopener noreferrer" class="w-full flex items-center justify-center space-x-2 bg-cyan-500 hover:bg-cyan-600 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-300 shadow-lg shadow-cyan-500/25">
+                            <span>Join Community</span>
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+                            </svg>
+                        </a>
+                    </div>
+                </div>
+            </div>
         </main>
 
         <!-- Bottom Navigation -->
-        <nav class="sticky bottom-0 z-50 glass-panel bg-slate-900/85 border-t border-white/5 pb-safe">
+        <nav id="bottom-nav" class="border-t border-white/5 pb-safe">
             <div class="flex justify-around items-center px-2 py-2">
                 <!-- Home -->
-                <button class="flex flex-col items-center p-2 text-indigo-400 transition-colors group">
+                <button id="nav-home" class="flex flex-col items-center p-2 text-indigo-400 transition-colors group">
                     <div class="p-1.5 rounded-xl bg-indigo-500/20 group-hover:bg-indigo-500/30 transition-colors mb-1">
                         <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                             <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path>
@@ -111,7 +174,7 @@ header("Expires: 0");
                 </button>
                 
                 <!-- Favorites -->
-                <button class="flex flex-col items-center p-2 text-slate-500 hover:text-slate-300 transition-colors group">
+                <button id="nav-favorites" class="flex flex-col items-center p-2 text-slate-500 hover:text-slate-300 transition-colors group">
                     <div class="p-1.5 rounded-xl group-hover:bg-white/5 transition-colors mb-1">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
@@ -121,7 +184,7 @@ header("Expires: 0");
                 </button>
                 
                 <!-- Profile -->
-                <button class="flex flex-col items-center p-2 text-slate-500 hover:text-slate-300 transition-colors group">
+                <button id="nav-profile" class="flex flex-col items-center p-2 text-slate-500 hover:text-slate-300 transition-colors group">
                     <div class="p-1.5 rounded-xl group-hover:bg-white/5 transition-colors mb-1">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
@@ -210,6 +273,55 @@ header("Expires: 0");
                 console.error('Error fetching dynamic data:', error);
                 loading.innerHTML = '<p class="text-center text-red-400">Failed to load live channels.</p>';
             }
+
+            // Tab switching logic
+            const sections = {
+                home: document.getElementById('home-section'),
+                favorites: document.getElementById('favorites-section'),
+                profile: document.getElementById('profile-section')
+            };
+
+            const navButtons = {
+                home: document.getElementById('nav-home'),
+                favorites: document.getElementById('nav-favorites'),
+                profile: document.getElementById('nav-profile')
+            };
+
+            function switchTab(activeTab) {
+                Object.keys(sections).forEach(tab => {
+                    if (tab === activeTab) {
+                        sections[tab].classList.remove('hidden');
+                    } else {
+                        sections[tab].classList.add('hidden');
+                    }
+                });
+
+                Object.keys(navButtons).forEach(tab => {
+                    const button = navButtons[tab];
+                    const iconWrapper = button.querySelector('div');
+                    if (tab === activeTab) {
+                        button.classList.remove('text-slate-500', 'hover:text-slate-300');
+                        button.classList.add('text-indigo-400');
+                        if (iconWrapper) {
+                            iconWrapper.classList.add('bg-indigo-500/20');
+                            iconWrapper.classList.remove('group-hover:bg-white/5');
+                        }
+                    } else {
+                        button.classList.remove('text-indigo-400');
+                        button.classList.add('text-slate-500', 'hover:text-slate-300');
+                        if (iconWrapper) {
+                            iconWrapper.classList.remove('bg-indigo-500/20');
+                            iconWrapper.classList.add('group-hover:bg-white/5');
+                        }
+                    }
+                });
+            }
+
+            Object.keys(navButtons).forEach(tab => {
+                if (navButtons[tab]) {
+                    navButtons[tab].addEventListener('click', () => switchTab(tab));
+                }
+            });
         });
 
         // Monetization Click Handler
