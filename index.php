@@ -173,18 +173,9 @@ header("Expires: 0");
         </main>
 
         <!-- Banner Ad -->
-        <div class="flex justify-center my-2">
-            <script type="text/javascript">
-              atOptions = {
-                'key' : '3ca358c9ad7530f34af0e7de8e9d6a3b',
-                'format' : 'iframe',
-                'height' : 60,
-                'width' : 468,
-                'params' : {}
-              };
-            </script>
-            <script type="text/javascript" src="https://www.highperformanceformat.com/3ca358c9ad7530f34af0e7de8e9d6a3b/invoke.js"></script>
-        </div>
+        <a href="INSERT_YOUR_ADSTERRA_LINK_HERE" target="_blank" rel="noopener noreferrer">
+            <img src="https://via.placeholder.com/468x60?text=Premium+Ad+Banner" alt="Advertisement" class="mx-auto my-2 border border-gray-700">
+        </a>
 
         <!-- Bottom Navigation -->
         <nav id="bottom-nav" class="border-t border-white/5 pb-safe">
