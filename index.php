@@ -173,9 +173,7 @@ header("Expires: 0");
         </main>
 
         <!-- Banner Ad -->
-        <a href="INSERT_YOUR_ADSTERRA_LINK_HERE" target="_blank" rel="noopener noreferrer">
-            <img src="https://via.placeholder.com/468x60?text=Premium+Ad+Banner" alt="Advertisement" class="mx-auto my-2 border border-gray-700">
-        </a>
+        <div class="flex justify-center my-2"><script src="ads.js"></script></div>
 
         <!-- Bottom Navigation -->
         <nav id="bottom-nav" class="border-t border-white/5 pb-safe">
