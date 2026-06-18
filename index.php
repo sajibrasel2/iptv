@@ -106,6 +106,13 @@ header("Expires: 0");
                 <img src="t&c.png" alt="Tech & Click TV" class="h-10 w-auto object-contain drop-shadow-md">
             </div>
         </header>
+        <div style="background: #1a2a6c; background: linear-gradient(to right, #1a2a6c, #b21f1f, #fdbb2d); padding: 25px; border-radius: 15px; text-align: center; color: white; margin: 20px 0; box-shadow: 0 10px 20px rgba(0,0,0,0.3);">
+            <h2 style="margin-top: 0; margin-bottom: 10px;">📺 Download TCTV App</h2>
+            <p style="margin-bottom: 20px;">Get all your favorite live sports and movies right in your pocket! Download our official app for a faster and smoother streaming experience.</p>
+            <a href="https://techandclick.site/iptv/download.html" style="background: white; color: #b21f1f; padding: 12px 30px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block; transition: 0.3s; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+                ⬇ Download Now
+            </a>
+        </div>
 
         <!-- Main Content Area -->
         <main class="flex-1 overflow-y-auto p-4 pb-40 space-y-4 relative">
