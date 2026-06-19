@@ -248,6 +248,30 @@ header("Expires: 0");
                 
                 // Store active ads globally for the click handler
                 window.activeAds = ads.map(a => a.ad_url);
+        // Fetch active prediction campaign and display banner
+        let activeCampaign = null;
+        try {
+            const predResp = await fetch('api_predictions.php');
+            const predData = await predResp.json();
+            if (predData && predData.active_campaign) {
+                activeCampaign = predData.active_campaign;
+                const homeSection = document.getElementById('home-section');
+                const bannerDiv = document.createElement('div');
+                bannerDiv.id = 'prediction-banner';
+                bannerDiv.className = 'flex items-center justify-between bg-gradient-to-r from-indigo-600 to-purple-600 p-4 rounded-xl mb-4 text-white shadow-lg cursor-pointer';
+                bannerDiv.innerHTML = `
+                    <div>
+                        <h2 class="text-lg font-bold">🎁 Predict & Win Jersey!</h2>
+                        <p class="text-sm">Predict the match outcome and stand a chance to win the jersey.</p>
+                    </div>
+                    <button id="open-prediction-modal" class="bg-white text-indigo-600 font-semibold py-2 px-4 rounded-full hover:bg-gray-100 transition">Predict Now</button>
+                `;
+                homeSection.prepend(bannerDiv);
+                document.getElementById('open-prediction-modal').addEventListener('click', () => openPredictionModal(activeCampaign));
+            }
+        } catch (e) {
+            console.error('Error fetching prediction campaign:', e);
+        }
 
                 // Remove loading spinner
                 loading.remove();
@@ -389,5 +413,116 @@ header("Expires: 0");
             });
         }
     </script>
+<!-- Prediction Modal -->
+<div id="prediction-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+  <div class="bg-slate-800 rounded-xl w-full max-w-md p-6 relative">
+    <button id="close-prediction-modal" class="absolute top-2 right-2 text-gray-400 hover:text-white text-2xl">&times;</button>
+    <div id="modal-content">
+      <img id="modal-prize-image" src="" alt="Prize Image" class="w-full h-48 object-cover rounded-md mb-4 hidden">
+      <h2 id="modal-match-title" class="text-xl font-bold mb-2 text-white"></h2>
+      <form id="prediction-form" class="space-y-4">
+        <input type="hidden" id="modal-campaign-id" name="campaign_id">
+        <div>
+          <label class="block text-sm text-gray-300">Full Name</label>
+          <input type="text" id="user-name" name="user_name" required class="w-full bg-slate-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-300">Phone Number</label>
+          <input type="tel" id="user-phone" name="user_phone" required class="w-full bg-slate-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div>
+          <span class="block text-sm text-gray-300 mb-1">Predict Winner</span>
+          <div class="flex space-x-4">
+            <label class="flex items-center">
+              <input type="radio" name="predicted_team" value="team_a" required class="mr-2">
+              <span id="team-a-label" class="text-white"></span>
+            </label>
+            <label class="flex items-center">
+              <input type="radio" name="predicted_team" value="team_b" required class="mr-2">
+              <span id="team-b-label" class="text-white"></span>
+            </label>
+          </div>
+        </div>
+        <div class="flex items-center">
+          <input type="checkbox" id="has-shared" name="has_shared" value="1" required class="mr-2">
+          <label for="has-shared" class="text-sm text-gray-300">I confirm that I have shared this app in 3 Facebook groups/timelines.</label>
+        </div>
+        <div class="flex justify-end space-x-2">
+          <button type="button" id="cancel-prediction" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500">Cancel</button>
+          <button type="submit" id="submit-prediction" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-500 flex items-center">
+            <span class="mr-2">Submit</span>
+            <svg id="submit-spinner" class="hidden animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+            </svg>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  // Modal open/close handlers
+  const modal = document.getElementById('prediction-modal');
+  const closeBtn = document.getElementById('close-prediction-modal');
+  const cancelBtn = document.getElementById('cancel-prediction');
+  const openModal = (campaign) => {
+    document.getElementById('modal-campaign-id').value = campaign.id;
+    document.getElementById('modal-match-title').textContent = `${campaign.team_a} vs ${campaign.team_b}`;
+    const img = document.getElementById('modal-prize-image');
+    if (campaign.prize_image_url) {
+      img.src = campaign.prize_image_url;
+      img.classList.remove('hidden');
+    } else {
+      img.classList.add('hidden');
+    }
+    document.getElementById('team-a-label').textContent = campaign.team_a;
+    document.getElementById('team-b-label').textContent = campaign.team_b;
+    modal.classList.remove('hidden');
+  };
+  // expose for banner click
+  window.openPredictionModal = openModal;
+  closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
+  cancelBtn.addEventListener('click', () => modal.classList.add('hidden'));
+
+  // Form submission
+  const form = document.getElementById('prediction-form');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const submitBtn = document.getElementById('submit-prediction');
+    const spinner = document.getElementById('submit-spinner');
+    submitBtn.disabled = true;
+    spinner.classList.remove('hidden');
+    const data = {
+      campaign_id: document.getElementById('modal-campaign-id').value,
+      user_name: document.getElementById('user-name').value.trim(),
+      user_phone: document.getElementById('user-phone').value.trim(),
+      predicted_team: document.querySelector('input[name="predicted_team"]:checked')?.value,
+      has_shared: document.getElementById('has-shared').checked ? 1 : 0
+    };
+    try {
+      const resp = await fetch('api_predictions.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      const result = await resp.json();
+      if (result.success) {
+        alert('Prediction Submitted! Keep an eye on our Facebook page for the lottery results.');
+        modal.classList.add('hidden');
+      } else {
+        alert(result.message || 'Submission failed.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('An error occurred while submitting.');
+    } finally {
+      submitBtn.disabled = false;
+      spinner.classList.add('hidden');
+    }
+  });
+});
+</script>
 </body>
 </html>
