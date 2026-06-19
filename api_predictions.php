@@ -97,6 +97,30 @@ if ($method === 'POST') {
     exit;
 }
 
+if ($method === 'DELETE') {
+    parse_str(file_get_contents('php://input'), $deleteData);
+    if (empty($deleteData['campaign_id'])) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Missing campaign_id for deletion']);
+        exit;
+    }
+    $campaignId = (int)$deleteData['campaign_id'];
+    try {
+        $pdo->beginTransaction();
+        $stmt = $pdo->prepare("DELETE FROM prediction_entries WHERE campaign_id = :cid");
+        $stmt->execute([':cid' => $campaignId]);
+        $stmt = $pdo->prepare("DELETE FROM prediction_campaigns WHERE id = :id");
+        $stmt->execute([':id' => $campaignId]);
+        $pdo->commit();
+        echo json_encode(['success' => true, 'message' => 'Campaign and related entries deleted']);
+    } catch (PDOException $e) {
+        $pdo->rollBack();
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to delete campaign']);
+    }
+    exit;
+}
+
 http_response_code(405);
 echo json_encode(['error' => 'Method not allowed']);
 ?>
