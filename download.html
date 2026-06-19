@@ -9,13 +9,14 @@
         .container { background: rgba(255, 255, 255, 0.05); padding: 40px 30px; border-radius: 20px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); max-width: 400px; width: 90%; }
         h1 { font-size: 2.8em; margin-bottom: 5px; background: -webkit-linear-gradient(#00d2ff, #3a7bd5); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800; }
         p.subtitle { font-size: 1.1em; line-height: 1.5; margin-bottom: 30px; color: #cfd8dc; }
-        .download-btn { display: inline-block; background: linear-gradient(to right, #00d2ff, #3a7bd5); color: white; text-decoration: none; padding: 16px 35px; font-size: 1.3em; font-weight: bold; border-radius: 50px; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(0, 210, 255, 0.4); }
+        .download-btn { display: inline-block; background: linear-gradient(to right, #00d2ff, #3a7bd5); color: white; text-decoration: none; padding: 16px 35px; font-size: 1.3em; font-weight: bold; border-radius: 50px; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(0, 210, 255, 0.4); margin-bottom: 20px; }
         .download-btn:hover { transform: translateY(-3px) scale(1.05); box-shadow: 0 8px 25px rgba(0, 210, 255, 0.6); }
-        .features { text-align: left; margin-top: 35px; margin-bottom: 25px; background: rgba(0, 0, 0, 0.2); padding: 15px 20px; border-radius: 12px; }
+        .features { text-align: left; margin-top: 20px; margin-bottom: 25px; background: rgba(0, 0, 0, 0.2); padding: 15px 20px; border-radius: 12px; }
         .features ul { list-style: none; padding: 0; margin: 0; }
         .features li { margin-bottom: 12px; font-size: 0.95em; color: #eceff1; display: flex; align-items: center; }
         .features li::before { content: '🚀'; margin-right: 12px; font-size: 1.2em; }
-        .footer-text { font-size: 0.85em; color: #8a9ea7; margin-bottom: 0; }
+        .footer-text { font-size: 0.85em; color: #8a9ea7; margin-top: 20px; }
+        .ad-banner { margin: 20px 0; min-height: 60px; }
     </style>
 </head>
 <body>
@@ -24,6 +25,8 @@
         <p class="subtitle">Watch Live Sports, Movies & Premium TV Channels for FREE!</p>
         
         <a href="tctv.apk" class="download-btn">⬇ Download APK</a>
+
+        <div class="ad-banner" id="banner-ad"></div>
         
         <div class="features">
             <ul>
@@ -36,5 +39,29 @@
         
         <p class="footer-text">Version: 1.0 | File Size: ~8.8 MB | OS: Android</p>
     </div>
+
+    <script>
+        // ১. Popunder লোড করা
+        var p = document.createElement('script');
+        p.src = 'https://pl29788588.effectivecpmnetwork.com/e6/af/2c/e6af2c0bfeb07b15ec93a1cd36bdf626.js';
+        document.body.appendChild(p);
+
+        // ২. Social Bar লোড করা
+        var s = document.createElement('script');
+        s.src = 'https://pl29788587.effectivecpmnetwork.com/41/f4/3e/41f43ea4963e593a9744b154a5aa8cdd.js';
+        document.body.appendChild(s);
+
+        // ৩. Banner লোড করা (iframe পদ্ধতি)
+        window['atOptions'] = {
+            'key' : '3ca358c9ad7530f34af0e7de8e9d6a3b',
+            'format' : 'iframe',
+            'height' : 60,
+            'width' : 468,
+            'params' : {}
+        };
+        var b = document.createElement('script');
+        b.src = 'https://www.highperformanceformat.com/3ca358c9ad7530f34af0e7de8e9d6a3b/invoke.js';
+        document.getElementById('banner-ad').appendChild(b);
+    </script>
 </body>
 </html>
