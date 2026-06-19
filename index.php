@@ -96,16 +96,19 @@ header("Expires: 0");
 
 </head>
     <script>
-        // Hide the banner if the site is loaded inside the Android WebView
-        document.addEventListener("DOMContentLoaded", function() {
-            if (navigator.userAgent.includes("wv") || navigator.userAgent.includes("Android")) {
-                var banner = document.querySelector('.app-download-banner');
-                if (banner) {
-                    banner.style.display = 'none';
-                }
+    document.addEventListener("DOMContentLoaded", function() {
+        var userAgent = navigator.userAgent || navigator.vendor || window.opera;
+        // Detect Android WebView specifically ('wv' or 'Version/' keyword inside Android agent)
+        var isWebView = (userAgent.indexOf('wv') > -1) || (userAgent.indexOf('Android') > -1 && userAgent.indexOf('Version/') > -1);
+        
+        if (isWebView) {
+            var banner = document.querySelector('.app-download-banner');
+            if (banner) {
+                banner.style.display = 'none';
             }
-        });
-    </script>
+        }
+    });
+</script>
 <body class="bg-black text-slate-100 min-h-screen font-sans antialiased selection:bg-indigo-500 selection:text-white flex justify-center">
 
     <!-- Mobile App Container Wrapper -->
