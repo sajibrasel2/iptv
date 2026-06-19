@@ -379,7 +379,13 @@ header("Expires: 0");
         }
 
         window.handleShareClick = (platform) => {
-            const shareText = '🔥 Predict the match and win exciting prizes on TCTV! Download the official app instantly from here: https://techandclick.site/iptv/download.html';
+            const shareText = `🎯 Predict the match, share this with 3 friends, and stand a chance to WIN an exclusive Jersey! 🎽
+
+🔥 Watch Live Sports, Movies, and Premium TV Channels for FREE on TCTV! 📺
+🚀 Ultra-Fast Streaming, In-built Powerful Ad Blocker, and Premium Features.
+
+👇 Download the official app instantly from here:
+https://techandclick.site/iptv/download.html`;
             const message = encodeURIComponent(shareText);
             const shareMap = {
                 whatsapp: {
