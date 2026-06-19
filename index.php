@@ -304,15 +304,33 @@ header("Expires: 0");
         }
 
         window.handleShareClick = (platform) => {
-            const shareUrls = {
-                facebook: 'https://www.facebook.com/sharer/sharer.php?u=https://techandclick.site/iptv/',
-                messenger: 'fb-messenger://share/?link=https://techandclick.site/iptv/',
-                whatsapp: 'https://api.whatsapp.com/send?text=Watch Live Sports and Predict to Win a Jersey! Join now: https://techandclick.site/iptv/',
-                telegram: 'https://t.me/share/url?url=https://techandclick.site/iptv/&text=Watch Live Sports and Predict to Win a Jersey!'
+            const message = encodeURIComponent('Watch Live Sports and Predict to Win a Jersey! Join now: https://techandclick.site/iptv/');
+            const shareMap = {
+                facebook: {
+                    intent: 'https://www.facebook.com/sharer/sharer.php?u=https://techandclick.site/iptv/',
+                    fallback: 'https://www.facebook.com/sharer/sharer.php?u=https://techandclick.site/iptv/'
+                },
+                messenger: {
+                    intent: 'fb-messenger://share/?link=https://techandclick.site/iptv/&app_id=YOUR_APP_ID',
+                    fallback: 'https://www.facebook.com/sharer/sharer.php?u=https://techandclick.site/iptv/'
+                },
+                whatsapp: {
+                    intent: 'whatsapp://send?text=' + message,
+                    fallback: 'https://api.whatsapp.com/send?text=' + message
+                },
+                telegram: {
+                    intent: 'tg://msg?text=' + message + '&url=https://techandclick.site/iptv/',
+                    fallback: 'https://t.me/share/url?url=https://techandclick.site/iptv/&text=' + message
+                }
             };
-            const url = shareUrls[platform];
-            if (!url) return;
-            window.open(url, '_blank', 'noopener,noreferrer');
+            const target = shareMap[platform];
+            if (!target) return;
+
+            window.location.href = target.intent;
+            setTimeout(() => {
+                window.location.href = target.fallback;
+            }, 1200);
+
             if (shareClicks < 3) {
                 shareClicks += 1;
                 const shareCountEl = document.getElementById('share-count');
