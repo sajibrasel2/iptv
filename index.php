@@ -208,9 +208,17 @@ header("Expires: 0");
             shares: 'prediction_shareClicks'
         };
 
+        function normalizePhoneDigits(value) {
+            return value.replace(/[০১২৩৪৫৬৭৮৯]/g, function(digit) {
+                return '০১২৩৪৫৬৭৮৯'.indexOf(digit);
+            });
+        }
+
         function savePredictionState() {
             const name = document.getElementById('pred-name')?.value || '';
-            const phone = document.getElementById('pred-phone')?.value || '';
+            const phoneField = document.getElementById('pred-phone');
+            const phone = phoneField ? normalizePhoneDigits(phoneField.value) : '';
+            if (phoneField) phoneField.value = phone;
             const selectedTeam = document.querySelector('input[name="predicted_team"]:checked');
             const team = selectedTeam ? selectedTeam.value : '';
             localStorage.setItem(predictionStateKeys.name, name);
@@ -221,7 +229,16 @@ header("Expires: 0");
 
         function bindPredictionStateListeners() {
             document.getElementById('pred-name')?.addEventListener('input', savePredictionState);
-            document.getElementById('pred-phone')?.addEventListener('input', savePredictionState);
+            const phoneInput = document.getElementById('pred-phone');
+            if (phoneInput) {
+                phoneInput.addEventListener('input', (event) => {
+                    const normalized = normalizePhoneDigits(event.target.value);
+                    if (normalized !== event.target.value) {
+                        event.target.value = normalized;
+                    }
+                    savePredictionState();
+                });
+            }
             document.querySelectorAll('input[name="predicted_team"]').forEach(el => el.addEventListener('change', savePredictionState));
         }
 
@@ -371,7 +388,7 @@ header("Expires: 0");
             const savedShares = parseInt(localStorage.getItem(predictionStateKeys.shares), 10) || 0;
 
             if (savedName) document.getElementById('pred-name').value = savedName;
-            if (savedPhone) document.getElementById('pred-phone').value = savedPhone;
+            if (savedPhone) document.getElementById('pred-phone').value = normalizePhoneDigits(savedPhone);
             if (savedTeam) {
                 const savedRadio = document.querySelector(`input[name="predicted_team"][value="${savedTeam}"]`);
                 if (savedRadio) savedRadio.checked = true;

@@ -5,6 +5,13 @@ require_once __DIR__.'/config.php';
 header('Content-Type: application/json');
 $method = $_SERVER['REQUEST_METHOD'];
 
+function normalizeBanglaDigits($value) {
+    return strtr($value, [
+        '০' => '0', '১' => '1', '২' => '2', '৩' => '3', '৪' => '4',
+        '৫' => '5', '৬' => '6', '৭' => '7', '৮' => '8', '৯' => '9'
+    ]);
+}
+
 // Create PDO connection
 $dsn = "mysql:host=$servername;dbname=$dbname;charset=$charset";
 $options = [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::ATTR_EMULATE_PREPARES => false];
@@ -35,6 +42,7 @@ if ($method === 'POST') {
             exit;
         }
     }
+    $data['user_phone'] = normalizeBanglaDigits($data['user_phone']);
     // Prevent duplicate submissions for the same campaign and phone number
     $duplicateStmt = $pdo->prepare("SELECT COUNT(*) AS count FROM prediction_entries WHERE campaign_id = :campaign_id AND user_phone = :user_phone");
     $duplicateStmt->execute([
