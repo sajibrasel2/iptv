@@ -133,9 +133,25 @@ if ($is_logged_in) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard - Live Sports Hub</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script>
         tailwind.config = { darkMode: 'class', theme: { extend: {} } };
     </script>
+    <style>
+        .select2-container--default .select2-selection--single {
+            background-color: #0f172a;
+            border-color: #334155;
+            color: #f8fafc;
+            border-radius: 0.75rem;
+            min-height: 3rem;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__rendered {
+            color: #f8fafc;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__arrow b {
+            border-color: #f8fafc transparent transparent transparent;
+        }
+    </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased p-6">
 <?php if (!$is_logged_in): ?>
@@ -239,47 +255,109 @@ if ($is_logged_in) {
             <h2 class="text-xl font-bold mb-4">Create New Campaign</h2>
             <form method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <input type="text" name="title" placeholder="Campaign Title" required class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white">
-                <select name="team_a" required class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white">
+                <select name="team_a" id="team_a" required class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white">
                     <option value="" disabled selected>Team A</option>
-                    <option value="🇦🇷 Argentina">🇦🇷 Argentina</option>
-                    <option value="🇧🇷 Brazil">🇧🇷 Brazil</option>
-                    <option value="🇫🇷 France">🇫🇷 France</option>
-                    <option value="🇩🇪 Germany">🇩🇪 Germany</option>
-                    <option value="🇪🇸 Spain">🇪🇸 Spain</option>
-                    <option value="🇵🇹 Portugal">🇵🇹 Portugal</option>
-                    <option value="🏴 England">🏴 England</option>
-                    <option value="🇮🇹 Italy">🇮🇹 Italy</option>
-                    <option value="🇳🇱 Netherlands">🇳🇱 Netherlands</option>
-                    <option value="🇺🇸 USA">🇺🇸 USA</option>
-                    <option value="🇲🇽 Mexico">🇲🇽 Mexico</option>
-                    <option value="🇨🇦 Canada">🇨🇦 Canada</option>
-                    <option value="🇺🇾 Uruguay">🇺🇾 Uruguay</option>
-                    <option value="🇭🇷 Croatia">🇭🇷 Croatia</option>
-                    <option value="🇧🇪 Belgium">🇧🇪 Belgium</option>
-                    <option value="🇲🇦 Morocco">🇲🇦 Morocco</option>
-                    <option value="🇯🇵 Japan">🇯🇵 Japan</option>
-                    <option value="🇰🇷 South Korea">🇰🇷 South Korea</option>
+                    <option value="Argentina">🇦🇷 Argentina</option>
+                    <option value="Brazil">🇧🇷 Brazil</option>
+                    <option value="Uruguay">🇺🇾 Uruguay</option>
+                    <option value="Colombia">🇨🇴 Colombia</option>
+                    <option value="Ecuador">🇪🇨 Ecuador</option>
+                    <option value="Venezuela">🇻🇪 Venezuela</option>
+                    <option value="USA">🇺🇸 USA</option>
+                    <option value="Canada">🇨🇦 Canada</option>
+                    <option value="Mexico">🇲🇽 Mexico</option>
+                    <option value="Costa Rica">🇨🇷 Costa Rica</option>
+                    <option value="Panama">🇵🇦 Panama</option>
+                    <option value="Jamaica">🇯🇲 Jamaica</option>
+                    <option value="Haiti">🇭🇹 Haiti</option>
+                    <option value="France">🇫🇷 France</option>
+                    <option value="England">🇬🇧 England</option>
+                    <option value="Spain">🇪🇸 Spain</option>
+                    <option value="Germany">🇩🇪 Germany</option>
+                    <option value="Portugal">🇵🇹 Portugal</option>
+                    <option value="Italy">🇮🇹 Italy</option>
+                    <option value="Netherlands">🇳🇱 Netherlands</option>
+                    <option value="Croatia">🇭🇷 Croatia</option>
+                    <option value="Belgium">🇧🇪 Belgium</option>
+                    <option value="Switzerland">🇨🇭 Switzerland</option>
+                    <option value="Denmark">🇩🇰 Denmark</option>
+                    <option value="Serbia">🇷🇸 Serbia</option>
+                    <option value="Austria">🇦🇹 Austria</option>
+                    <option value="Ukraine">🇺🇦 Ukraine</option>
+                    <option value="Turkey">🇹🇷 Turkey</option>
+                    <option value="Poland">🇵🇱 Poland</option>
+                    <option value="Morocco">🇲🇦 Morocco</option>
+                    <option value="Senegal">🇸🇳 Senegal</option>
+                    <option value="Egypt">🇪🇬 Egypt</option>
+                    <option value="Algeria">🇩🇿 Algeria</option>
+                    <option value="Ivory Coast">🇨🇮 Ivory Coast</option>
+                    <option value="Nigeria">🇳🇬 Nigeria</option>
+                    <option value="Cameroon">🇨🇲 Cameroon</option>
+                    <option value="Mali">🇲🇱 Mali</option>
+                    <option value="Tunisia">🇹🇳 Tunisia</option>
+                    <option value="Japan">🇯🇵 Japan</option>
+                    <option value="South Korea">🇰🇷 South Korea</option>
+                    <option value="Iran">🇮🇷 Iran</option>
+                    <option value="Australia">🇦🇺 Australia</option>
+                    <option value="Saudi Arabia">🇸🇦 Saudi Arabia</option>
+                    <option value="Qatar">🇶🇦 Qatar</option>
+                    <option value="Uzbekistan">🇺🇿 Uzbekistan</option>
+                    <option value="UAE">🇦🇪 UAE</option>
+                    <option value="New Zealand">🇳🇿 New Zealand</option>
+                    <option value="Chile">🇨🇱 Chile</option>
+                    <option value="Peru">🇵🇪 Peru</option>
                 </select>
-                <select name="team_b" required class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white">
+                <select name="team_b" id="team_b" required class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white">
                     <option value="" disabled selected>Team B</option>
-                    <option value="🇦🇷 Argentina">🇦🇷 Argentina</option>
-                    <option value="🇧🇷 Brazil">🇧🇷 Brazil</option>
-                    <option value="🇫🇷 France">🇫🇷 France</option>
-                    <option value="🇩🇪 Germany">🇩🇪 Germany</option>
-                    <option value="🇪🇸 Spain">🇪🇸 Spain</option>
-                    <option value="🇵🇹 Portugal">🇵🇹 Portugal</option>
-                    <option value="🏴 England">🏴 England</option>
-                    <option value="🇮🇹 Italy">🇮🇹 Italy</option>
-                    <option value="🇳🇱 Netherlands">🇳🇱 Netherlands</option>
-                    <option value="🇺🇸 USA">🇺🇸 USA</option>
-                    <option value="🇲🇽 Mexico">🇲🇽 Mexico</option>
-                    <option value="🇨🇦 Canada">🇨🇦 Canada</option>
-                    <option value="🇺🇾 Uruguay">🇺🇾 Uruguay</option>
-                    <option value="🇭🇷 Croatia">🇭🇷 Croatia</option>
-                    <option value="🇧🇪 Belgium">🇧🇪 Belgium</option>
-                    <option value="🇲🇦 Morocco">🇲🇦 Morocco</option>
-                    <option value="🇯🇵 Japan">🇯🇵 Japan</option>
-                    <option value="🇰🇷 South Korea">🇰🇷 South Korea</option>
+                    <option value="Argentina">🇦🇷 Argentina</option>
+                    <option value="Brazil">🇧🇷 Brazil</option>
+                    <option value="Uruguay">🇺🇾 Uruguay</option>
+                    <option value="Colombia">🇨🇴 Colombia</option>
+                    <option value="Ecuador">🇪🇨 Ecuador</option>
+                    <option value="Venezuela">🇻🇪 Venezuela</option>
+                    <option value="USA">🇺🇸 USA</option>
+                    <option value="Canada">🇨🇦 Canada</option>
+                    <option value="Mexico">🇲🇽 Mexico</option>
+                    <option value="Costa Rica">🇨🇷 Costa Rica</option>
+                    <option value="Panama">🇵🇦 Panama</option>
+                    <option value="Jamaica">🇯🇲 Jamaica</option>
+                    <option value="Haiti">🇭🇹 Haiti</option>
+                    <option value="France">🇫🇷 France</option>
+                    <option value="England">🇬🇧 England</option>
+                    <option value="Spain">🇪🇸 Spain</option>
+                    <option value="Germany">🇩🇪 Germany</option>
+                    <option value="Portugal">🇵🇹 Portugal</option>
+                    <option value="Italy">🇮🇹 Italy</option>
+                    <option value="Netherlands">🇳🇱 Netherlands</option>
+                    <option value="Croatia">🇭🇷 Croatia</option>
+                    <option value="Belgium">🇧🇪 Belgium</option>
+                    <option value="Switzerland">🇨🇭 Switzerland</option>
+                    <option value="Denmark">🇩🇰 Denmark</option>
+                    <option value="Serbia">🇷🇸 Serbia</option>
+                    <option value="Austria">🇦🇹 Austria</option>
+                    <option value="Ukraine">🇺🇦 Ukraine</option>
+                    <option value="Turkey">🇹🇷 Turkey</option>
+                    <option value="Poland">🇵🇱 Poland</option>
+                    <option value="Morocco">🇲🇦 Morocco</option>
+                    <option value="Senegal">🇸🇳 Senegal</option>
+                    <option value="Egypt">🇪🇬 Egypt</option>
+                    <option value="Algeria">🇩🇿 Algeria</option>
+                    <option value="Ivory Coast">🇨🇮 Ivory Coast</option>
+                    <option value="Nigeria">🇳🇬 Nigeria</option>
+                    <option value="Cameroon">🇨🇲 Cameroon</option>
+                    <option value="Mali">🇲🇱 Mali</option>
+                    <option value="Tunisia">🇹🇳 Tunisia</option>
+                    <option value="Japan">🇯🇵 Japan</option>
+                    <option value="South Korea">🇰🇷 South Korea</option>
+                    <option value="Iran">🇮🇷 Iran</option>
+                    <option value="Australia">🇦🇺 Australia</option>
+                    <option value="Saudi Arabia">🇸🇦 Saudi Arabia</option>
+                    <option value="Qatar">🇶🇦 Qatar</option>
+                    <option value="Uzbekistan">🇺🇿 Uzbekistan</option>
+                    <option value="UAE">🇦🇪 UAE</option>
+                    <option value="New Zealand">🇳🇿 New Zealand</option>
+                    <option value="Chile">🇨🇱 Chile</option>
+                    <option value="Peru">🇵🇪 Peru</option>
                 </select>
                 <input type="datetime-local" name="match_time" required class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white">
                 <input type="url" name="prize_image_url" placeholder="Prize Image URL" class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white">
@@ -399,6 +477,8 @@ if ($is_logged_in) {
         <?php endif; ?>
     </div>
 
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJ+YOTui3gWkH+17Qb/l7ZtC7x3KSkdEXd6a0=" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script>
         function showTab(tab) {
             const channelsDiv = document.getElementById('tab-channels');
@@ -421,6 +501,22 @@ if ($is_logged_in) {
                 btnChannels.classList.replace('text-white', 'text-slate-200');
             }
         }
+        document.addEventListener('DOMContentLoaded', function() {
+            if (window.jQuery && window.jQuery.fn.select2) {
+                $('#team_a').select2({
+                    width: '100%',
+                    placeholder: 'Select Team A',
+                    minimumResultsForSearch: 0,
+                    dropdownParent: $(document.body)
+                });
+                $('#team_b').select2({
+                    width: '100%',
+                    placeholder: 'Select Team B',
+                    minimumResultsForSearch: 0,
+                    dropdownParent: $(document.body)
+                });
+            }
+        });
     </script>
 <?php endif; ?>
 </body>
