@@ -25,6 +25,14 @@ function ensurePredictionSchema(PDO $pdo) {
         if (!$hasScoreB) {
             $pdo->exec("ALTER TABLE prediction_entries ADD COLUMN predicted_score_b INT NULL");
         }
+        $hasCountry = $pdo->query("SHOW COLUMNS FROM prediction_entries LIKE 'country'")->fetch();
+        if (!$hasCountry) {
+            $pdo->exec("ALTER TABLE prediction_entries ADD COLUMN country VARCHAR(100) NULL");
+        }
+        $hasDistrict = $pdo->query("SHOW COLUMNS FROM prediction_entries LIKE 'district'")->fetch();
+        if (!$hasDistrict) {
+            $pdo->exec("ALTER TABLE prediction_entries ADD COLUMN district VARCHAR(100) NULL");
+        }
         $predTeam = $pdo->query("SHOW COLUMNS FROM prediction_entries LIKE 'predicted_team'")->fetch();
         if ($predTeam && stripos($predTeam['Type'], 'enum(') === 0) {
             $pdo->exec("ALTER TABLE prediction_entries MODIFY predicted_team VARCHAR(20) NULL");
@@ -66,7 +74,7 @@ if ($method === 'GET') {
 
 if ($method === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
-    $required = ['campaign_id','user_name','user_phone','predicted_team','predicted_score_a','predicted_score_b','has_shared'];
+    $required = ['campaign_id','user_name','user_phone','country','district','predicted_team','predicted_score_a','predicted_score_b','has_shared'];
     foreach ($required as $field) {
         if (!isset($data[$field])) {
             http_response_code(400);
@@ -75,6 +83,8 @@ if ($method === 'POST') {
         }
     }
     $data['user_phone'] = normalizeBanglaDigits($data['user_phone']);
+    $data['country'] = trim(filter_var($data['country'], FILTER_SANITIZE_FULL_SPECIAL_CHARS));
+    $data['district'] = trim(filter_var($data['district'], FILTER_SANITIZE_FULL_SPECIAL_CHARS));
     $data['predicted_score_a'] = is_numeric($data['predicted_score_a']) ? (int)$data['predicted_score_a'] : null;
     $data['predicted_score_b'] = is_numeric($data['predicted_score_b']) ? (int)$data['predicted_score_b'] : null;
     // Prevent duplicate submissions for the same campaign and phone number
@@ -110,11 +120,13 @@ if ($method === 'POST') {
     }
 
     // Basic validation (you can extend this)
-    $stmt = $pdo->prepare("INSERT INTO prediction_entries (campaign_id, user_name, user_phone, predicted_team, predicted_score_a, predicted_score_b, has_shared) VALUES (:campaign_id, :user_name, :user_phone, :predicted_team, :predicted_score_a, :predicted_score_b, :has_shared)");
+    $stmt = $pdo->prepare("INSERT INTO prediction_entries (campaign_id, user_name, user_phone, country, district, predicted_team, predicted_score_a, predicted_score_b, has_shared) VALUES (:campaign_id, :user_name, :user_phone, :country, :district, :predicted_team, :predicted_score_a, :predicted_score_b, :has_shared)");
     $stmt->execute([
         ':campaign_id'   => $data['campaign_id'],
         ':user_name'     => $data['user_name'],
         ':user_phone'    => $data['user_phone'],
+        ':country'       => $data['country'],
+        ':district'      => $data['district'],
         ':predicted_team'=> $data['predicted_team'],
         ':predicted_score_a' => $data['predicted_score_a'],
         ':predicted_score_b' => $data['predicted_score_b'],

@@ -152,6 +152,8 @@ header("Expires: 0");
                     <input type="hidden" id="pred-campaign-id">
                     <input type="text" id="pred-name" required placeholder="Your Full Name" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:border-indigo-500 outline-none">
                     <input type="tel" id="pred-phone" required placeholder="Your Phone Number" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:border-indigo-500 outline-none">
+                    <input type="text" id="pred-country" required placeholder="Enter your Country" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:border-indigo-500 outline-none">
+                    <input type="text" id="pred-district" required placeholder="Enter your District/City" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:border-indigo-500 outline-none">
                     <div class="space-y-2">
                         <p class="text-xs text-slate-400 uppercase tracking-wider">Prediction</p>
                         <div class="grid grid-cols-3 gap-3">
@@ -220,6 +222,8 @@ header("Expires: 0");
         const predictionStateKeys = {
             name: 'prediction_name',
             phone: 'prediction_phone',
+            country: 'prediction_country',
+            district: 'prediction_district',
             team: 'prediction_team',
             scoreA: 'prediction_score_a',
             scoreB: 'prediction_score_b',
@@ -321,12 +325,16 @@ header("Expires: 0");
             const phoneField = document.getElementById('pred-phone');
             const phone = phoneField ? normalizePhoneDigits(phoneField.value) : '';
             if (phoneField) phoneField.value = phone;
+            const country = document.getElementById('pred-country')?.value || '';
+            const district = document.getElementById('pred-district')?.value || '';
             const selectedTeam = document.querySelector('input[name="predicted_team"]:checked');
             const team = selectedTeam ? selectedTeam.value : '';
             const scoreA = document.getElementById('pred-score-a')?.value || '';
             const scoreB = document.getElementById('pred-score-b')?.value || '';
             localStorage.setItem(predictionStateKeys.name, name);
             localStorage.setItem(predictionStateKeys.phone, phone);
+            localStorage.setItem(predictionStateKeys.country, country);
+            localStorage.setItem(predictionStateKeys.district, district);
             localStorage.setItem(predictionStateKeys.team, team);
             localStorage.setItem(predictionStateKeys.scoreA, scoreA);
             localStorage.setItem(predictionStateKeys.scoreB, scoreB);
@@ -348,6 +356,8 @@ header("Expires: 0");
             document.querySelectorAll('input[name="predicted_team"]').forEach(el => el.addEventListener('change', savePredictionState));
             document.getElementById('pred-score-a')?.addEventListener('input', savePredictionState);
             document.getElementById('pred-score-b')?.addEventListener('input', savePredictionState);
+            document.getElementById('pred-country')?.addEventListener('input', savePredictionState);
+            document.getElementById('pred-district')?.addEventListener('input', savePredictionState);
         }
 
         // Tab Logic
@@ -523,6 +533,12 @@ https://techandclick.site/iptv/download.html`;
 
             if (savedName) document.getElementById('pred-name').value = savedName;
             if (savedPhone) document.getElementById('pred-phone').value = normalizePhoneDigits(savedPhone);
+            if (localStorage.getItem(predictionStateKeys.country) !== null) {
+                document.getElementById('pred-country').value = localStorage.getItem(predictionStateKeys.country);
+            }
+            if (localStorage.getItem(predictionStateKeys.district) !== null) {
+                document.getElementById('pred-district').value = localStorage.getItem(predictionStateKeys.district);
+            }
             if (savedTeam) {
                 const savedRadio = document.querySelector(`input[name="predicted_team"][value="${savedTeam}"]`);
                 if (savedRadio) savedRadio.checked = true;
@@ -578,6 +594,8 @@ https://techandclick.site/iptv/download.html`;
             }
             localStorage.removeItem(predictionStateKeys.name);
             localStorage.removeItem(predictionStateKeys.phone);
+            localStorage.removeItem(predictionStateKeys.country);
+            localStorage.removeItem(predictionStateKeys.district);
             localStorage.removeItem(predictionStateKeys.team);
             localStorage.removeItem(predictionStateKeys.scoreA);
             localStorage.removeItem(predictionStateKeys.scoreB);
@@ -601,6 +619,8 @@ https://techandclick.site/iptv/download.html`;
                         user_name: document.getElementById('pred-name').value,
                         user_phone: document.getElementById('pred-phone').value,
                         predicted_team: document.querySelector('input[name="predicted_team"]:checked').value,
+                        country: document.getElementById('pred-country').value,
+                        district: document.getElementById('pred-district').value,
                         predicted_score_a: document.getElementById('pred-score-a').value,
                         predicted_score_b: document.getElementById('pred-score-b').value,
                         has_shared: document.getElementById('pred-share').checked

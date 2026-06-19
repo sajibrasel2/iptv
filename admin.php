@@ -524,6 +524,8 @@ if ($is_logged_in) {
                             <th class="px-3 py-2">#</th>
                             <th class="px-3 py-2">Name</th>
                             <th class="px-3 py-2">Phone</th>
+                            <th class="px-3 py-2">Country</th>
+                            <th class="px-3 py-2">District</th>
                             <th class="px-3 py-2">Prediction</th>
                             <th class="px-3 py-2">Score</th>
                             <th class="px-3 py-2">Shared?</th>
@@ -541,6 +543,8 @@ if ($is_logged_in) {
                             <td class="px-3 py-2 text-center"><?php echo $e['id']; ?></td>
                             <td class="px-3 py-2"><?php echo htmlspecialchars($e['user_name']); ?></td>
                             <td class="px-3 py-2"><?php echo htmlspecialchars($e['user_phone']); ?></td>
+                            <td class="px-3 py-2"><?php echo htmlspecialchars($e['country'] ?? ''); ?></td>
+                            <td class="px-3 py-2"><?php echo htmlspecialchars($e['district'] ?? ''); ?></td>
                             <td class="px-3 py-2"><?php echo htmlspecialchars($predictionLabel); ?></td>
                             <td class="px-3 py-2 text-center"><?php echo htmlspecialchars($e['predicted_score_a'] . ' - ' . $e['predicted_score_b']); ?></td>
                             <td class="px-3 py-2 text-center"><?php echo $e['has_shared'] ? 'Yes' : 'No'; ?></td>
