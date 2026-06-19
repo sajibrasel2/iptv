@@ -379,15 +379,16 @@ header("Expires: 0");
         }
 
         window.handleShareClick = (platform) => {
-            const message = encodeURIComponent('Watch Live Sports and Predict to Win a Jersey! Join now: https://techandclick.site/iptv/');
+            const shareText = '🔥 Predict the match and win exciting prizes on TCTV! Download the official app instantly from here: https://techandclick.site/iptv/download.html';
+            const message = encodeURIComponent(shareText);
             const shareMap = {
                 whatsapp: {
                     intent: 'whatsapp://send?text=' + message,
                     fallback: 'https://api.whatsapp.com/send?text=' + message
                 },
                 telegram: {
-                    intent: 'tg://msg?text=' + message + '&url=https://techandclick.site/iptv/',
-                    fallback: 'https://t.me/share/url?url=https://techandclick.site/iptv/&text=' + message
+                    intent: 'tg://msg?text=' + message,
+                    fallback: 'https://t.me/share/url?text=' + message
                 }
             };
             const target = shareMap[platform];
