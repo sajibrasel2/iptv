@@ -227,22 +227,26 @@ header("Expires: 0");
         };
 
         function normalizePhoneDigits(value) {
-            return value.replace(/[০১২৩৪৫৬৭৮৯]/g, function(digit) {
-                return '০১২৩৪৫৬৭৮৯'.indexOf(digit);
-            });
+            if (!value) return '';
+            const banglaDigits = '০১২৩৪৫৬৭৮৯';
+            const normalized = value.split('').map((char) => {
+                const index = banglaDigits.indexOf(char);
+                return index >= 0 ? String(index) : char;
+            }).join('');
+            return normalized.replace(/[^\d\+]/g, '').trim();
         }
 
         const countryFlagMap = {
-            'Argentina': '🇦🇷', 'Australia': '🇦🇺', 'Austria': '🇦🇹', 'Belgium': '🇧🇪', 'Brazil': '🇧🇷',
-            'Canada': '🇨🇦', 'Chile': '🇨🇱', 'China': '🇨🇳', 'Colombia': '🇨🇴', 'Croatia': '🇭🇷',
-            'Czech Republic': '🇨🇿', 'Denmark': '🇩🇰', 'Egypt': '🇪🇬', 'England': '🏴', 'France': '🇫🇷',
-            'Germany': '🇩🇪', 'Ghana': '🇬🇭', 'India': '🇮🇳', 'Italy': '🇮🇹', 'Japan': '🇯🇵',
-            'Mexico': '🇲🇽', 'Morocco': '🇲🇦', 'Netherlands': '🇳🇱', 'Nigeria': '🇳🇬', 'Poland': '🇵🇱',
-            'Portugal': '🇵🇹', 'Qatar': '🇶🇦', 'Russia': '🇷🇺', 'Saudi Arabia': '🇸🇦', 'Scotland': '🏴',
-            'Serbia': '🇷🇸', 'South Korea': '🇰🇷', 'Spain': '🇪🇸', 'Sweden': '🇸🇪', 'Switzerland': '🇨🇭',
-            'Turkey': '🇹🇷', 'Ukraine': '🇺🇦', 'United States': '🇺🇸', 'USA': '🇺🇸', 'Wales': '🏴',
-            'Bangladesh': '🇧🇩', 'UAE': '🇦🇪', 'South Africa': '🇿🇦', 'Ireland': '🇮🇪', 'Hungary': '🇭🇺',
-            'Romania': '🇷🇴', 'Greece': '🇬🇷', 'Portugal': '🇵🇹', 'Netherlands': '🇳🇱', 'Belgium': '🇧🇪'
+            "Argentina": "🇦🇷", "Brazil": "🇧🇷", "Uruguay": "🇺🇾", "Colombia": "🇨🇴", "Ecuador": "🇪🇨", 
+            "Venezuela": "🇻🇪", "USA": "🇺🇸", "Canada": "🇨🇦", "Mexico": "🇲🇽", "Costa Rica": "🇨🇷", 
+            "Panama": "🇵🇦", "Jamaica": "🇯🇲", "Haiti": "🇭🇹", "France": "🇫🇷", "England": "🇬🇧", 
+            "Spain": "🇪🇸", "Germany": "🇩🇪", "Portugal": "🇵🇹", "Italy": "🇮🇹", "Netherlands": "🇳🇱", 
+            "Croatia": "🇭🇷", "Belgium": "🇧🇪", "Switzerland": "🇨🇭", "Denmark": "🇩🇰", "Serbia": "🇷🇸", 
+            "Austria": "🇦🇹", "Ukraine": "🇺🇦", "Turkey": "🇹🇷", "Poland": "🇵🇱", "Morocco": "🇲🇦", 
+            "Senegal": "🇸🇳", "Egypt": "🇪🇬", "Algeria": "🇩🇿", "Ivory Coast": "🇨🇮", "Nigeria": "🇳🇬", 
+            "Cameroon": "🇨🇲", "Mali": "🇲🇱", "Tunisia": "🇹🇳", "Japan": "🇯🇵", "South Korea": "🇰🇷", 
+            "Iran": "🇮🇷", "Australia": "🇦🇺", "Saudi Arabia": "🇸🇦", "Qatar": "🇶🇦", "Uzbekistan": "🇺🇿", 
+            "UAE": "🇦🇪", "New Zealand": "🇳🇿", "Chile": "🇨🇱", "Peru": "🇵🇪"
         };
 
         function getCountryFlag(countryName) {
@@ -614,8 +618,8 @@ https://techandclick.site/iptv/download.html`;
                     setTimeout(closePredictionModal, 3500);
                 } else {
                     const errorData = await res.json().catch(() => null);
-                    if (res.status === 400 && errorData?.error === 'duplicate_phone') {
-                        alert('এই মোবাইল নাম্বারটি দিয়ে ইতিমধ্যে প্রেডিকশন দেওয়া হয়েছে!');
+                    if (res.status === 400 && errorData?.message === 'This mobile number has already submitted a prediction for this match.') {
+                        alert('This mobile number has already submitted a prediction for this match.');
                     } else {
                         alert('Error submitting prediction.');
                     }

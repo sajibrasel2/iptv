@@ -52,19 +52,35 @@ if ($is_logged_in) {
 
         // ---------- Prediction Admin Handlers ----------
         if (isset($_POST['create_campaign'])) {
+            $campaignId = isset($_POST['campaign_id']) ? (int)$_POST['campaign_id'] : 0;
             $raw = $_POST['match_time'];
             $match_time = str_replace('T', ' ', $raw) . ':00';
-            $stmt = $conn->prepare("INSERT INTO prediction_campaigns (title, team_a, team_b, match_time, prize_image_url, fb_post_link, status) VALUES (:title, :team_a, :team_b, :match_time, :prize_image_url, :fb_post_link, 'active')");
-            $stmt->execute([
-                ':title' => $_POST['title'],
-                ':team_a' => $_POST['team_a'],
-                ':team_b' => $_POST['team_b'],
-                ':match_time' => $match_time,
-                ':prize_image_url' => $_POST['prize_image_url'],
-                ':fb_post_link' => $_POST['fb_post_link'],
-            ]);
-            $newId = $conn->lastInsertId();
-            $conn->exec("UPDATE prediction_campaigns SET status='closed' WHERE id <> $newId AND status='active'");
+            if ($campaignId > 0) {
+                $stmt = $conn->prepare("UPDATE prediction_campaigns SET title=:title, team_a=:team_a, team_b=:team_b, match_time=:match_time, prize_image_url=:prize_image_url, fb_post_link=:fb_post_link WHERE id=:id");
+                $stmt->execute([
+                    ':title' => $_POST['title'],
+                    ':team_a' => $_POST['team_a'],
+                    ':team_b' => $_POST['team_b'],
+                    ':match_time' => $match_time,
+                    ':prize_image_url' => $_POST['prize_image_url'],
+                    ':fb_post_link' => $_POST['fb_post_link'],
+                    ':id' => $campaignId,
+                ]);
+            } else {
+                $stmt = $conn->prepare("INSERT INTO prediction_campaigns (title, team_a, team_b, match_time, prize_image_url, fb_post_link, status) VALUES (:title, :team_a, :team_b, :match_time, :prize_image_url, :fb_post_link, 'active')");
+                $stmt->execute([
+                    ':title' => $_POST['title'],
+                    ':team_a' => $_POST['team_a'],
+                    ':team_b' => $_POST['team_b'],
+                    ':match_time' => $match_time,
+                    ':prize_image_url' => $_POST['prize_image_url'],
+                    ':fb_post_link' => $_POST['fb_post_link'],
+                ]);
+                $newId = $conn->lastInsertId();
+                $conn->exec("UPDATE prediction_campaigns SET status='closed' WHERE id <> $newId AND status='active'");
+            }
+            header('Location: admin.php');
+            exit;
         }
         if (isset($_POST['toggle_status'])) {
             $campaignId = (int)$_POST['campaign_id'];
@@ -88,6 +104,89 @@ if ($is_logged_in) {
             header('Location: admin.php');
             exit;
         }
+        $editCampaign = null;
+        if (isset($_GET['edit_campaign'])) {
+            $editId = (int)$_GET['edit_campaign'];
+            $stmt = $conn->prepare("SELECT * FROM prediction_campaigns WHERE id = :id LIMIT 1");
+            $stmt->execute([':id' => $editId]);
+            $editCampaign = $stmt->fetch();
+        }
+
+        $teams = [
+            'Argentina' => '🇦🇷 Argentina',
+            'Australia' => '🇦🇺 Australia',
+            'Austria' => '🇦🇹 Austria',
+            'Algeria' => '🇩🇿 Algeria',
+            'Belgium' => '🇧🇪 Belgium',
+            'Bangladesh' => '🇧🇩 Bangladesh',
+            'Brazil' => '🇧🇷 Brazil',
+            'Cameroon' => '🇨🇲 Cameroon',
+            'Canada' => '🇨🇦 Canada',
+            'Chile' => '🇨🇱 Chile',
+            'China' => '🇨🇳 China',
+            'Colombia' => '🇨🇴 Colombia',
+            'Costa Rica' => '🇨🇷 Costa Rica',
+            'Croatia' => '🇭🇷 Croatia',
+            'Czech Republic' => '🇨🇿 Czech Republic',
+            'Denmark' => '🇩🇰 Denmark',
+            'Ecuador' => '🇪🇨 Ecuador',
+            'Egypt' => '🇪🇬 Egypt',
+            'England' => '🇬🇧 England',
+            'France' => '🇫🇷 France',
+            'Germany' => '🇩🇪 Germany',
+            'Ghana' => '🇬🇭 Ghana',
+            'Greece' => '🇬🇷 Greece',
+            'Haiti' => '🇭🇹 Haiti',
+            'Hungary' => '🇭🇺 Hungary',
+            'India' => '🇮🇳 India',
+            'Iran' => '🇮🇷 Iran',
+            'Ireland' => '🇮🇪 Ireland',
+            'Italy' => '🇮🇹 Italy',
+            'Japan' => '🇯🇵 Japan',
+            'Jamaica' => '🇯🇲 Jamaica',
+            'Mexico' => '🇲🇽 Mexico',
+            'Mali' => '🇲🇱 Mali',
+            'Morocco' => '🇲🇦 Morocco',
+            'Netherlands' => '🇳🇱 Netherlands',
+            'New Zealand' => '🇳🇿 New Zealand',
+            'Nigeria' => '🇳🇬 Nigeria',
+            'Panama' => '🇵🇦 Panama',
+            'Peru' => '🇵🇪 Peru',
+            'Poland' => '🇵🇱 Poland',
+            'Portugal' => '🇵🇹 Portugal',
+            'Qatar' => '🇶🇦 Qatar',
+            'Romania' => '🇷🇴 Romania',
+            'Russia' => '🇷🇺 Russia',
+            'Saudi Arabia' => '🇸🇦 Saudi Arabia',
+            'Scotland' => '🏴 Scotland',
+            'Senegal' => '🇸🇳 Senegal',
+            'Spain' => '🇪🇸 Spain',
+            'Sweden' => '🇸🇪 Sweden',
+            'Switzerland' => '🇨🇭 Switzerland',
+            'South Africa' => '🇿🇦 South Africa',
+            'South Korea' => '🇰🇷 South Korea',
+            'Turkey' => '🇹🇷 Turkey',
+            'Tunisia' => '🇹🇳 Tunisia',
+            'UAE' => '🇦🇪 UAE',
+            'Ukraine' => '🇺🇦 Ukraine',
+            'United States' => '🇺🇸 United States',
+            'USA' => '🇺🇸 USA',
+            'Uruguay' => '🇺🇾 Uruguay',
+            'Uzbekistan' => '🇺🇿 Uzbekistan',
+            'Venezuela' => '🇻🇪 Venezuela',
+            'Wales' => '🏴 Wales',
+            'Ivory Coast' => '🇨🇮 Ivory Coast'
+        ];
+
+        function renderTeamOptions($selectedTeam = '') {
+            global $teams;
+            $options = '';
+            foreach ($teams as $value => $label) {
+                $options .= '<option value="'.htmlspecialchars($value).'"'.($selectedTeam === $value ? ' selected' : '').'>'.htmlspecialchars($label).'</option>';
+            }
+            return $options;
+        }
+
         if (isset($_POST['draw_winners'])) {
             $campaignId = (int)$_POST['campaign_id'];
             $actualResult = $_POST['actual_result'] ?? '';
@@ -254,6 +353,7 @@ if ($is_logged_in) {
         <section class="bg-slate-800/50 p-6 rounded-2xl mb-8">
             <h2 class="text-xl font-bold mb-4">Create New Campaign</h2>
             <form method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <input type="hidden" name="campaign_id" id="edit_campaign_id" value="">
                 <input type="text" name="title" placeholder="Campaign Title" required class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white">
                 <select name="team_a" id="team_a" required class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white">
                     <option value="" disabled selected>Team A</option>
@@ -362,7 +462,8 @@ if ($is_logged_in) {
                 <input type="datetime-local" name="match_time" required class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white">
                 <input type="url" name="prize_image_url" placeholder="Prize Image URL" class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white">
                 <input type="url" name="fb_post_link" placeholder="Facebook Post Link" class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white">
-                <button type="submit" name="create_campaign" class="col-span-2 bg-green-500 hover:bg-green-600 text-white font-semibold py-2 rounded-xl transition-colors">Create Campaign</button>
+                <button type="submit" name="create_campaign" id="campaign-submit-btn" class="col-span-2 bg-green-500 hover:bg-green-600 text-white font-semibold py-2 rounded-xl transition-colors">Create Campaign</button>
+                <button type="button" id="campaign-cancel-btn" onclick="resetCampaignForm()" class="col-span-2 hidden bg-slate-600 hover:bg-slate-500 text-white font-semibold py-2 rounded-xl transition-colors">Cancel Edit</button>
             </form>
         </section>
         <section class="overflow-x-auto mb-8">
@@ -399,6 +500,7 @@ if ($is_logged_in) {
                         </td>
                         <td class="px-4 py-2 text-center space-x-2">
                             <a href="?view_entries=<?php echo $c['id']; ?>" class="text-sm bg-slate-600 hover:bg-slate-500 text-white px-2 py-1 rounded">View Entries</a>
+                            <button type="button" onclick='editCampaign(<?php echo json_encode($c, JSON_HEX_APOS|JSON_HEX_QUOT); ?>)' class="text-sm bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded">Edit</button>
                             <form method="POST" class="inline-block" onsubmit="return confirm('Are you sure you want to delete this campaign and all its predictions?');">
                                 <input type="hidden" name="campaign_id" value="<?php echo $c['id']; ?>">
                                 <button type="submit" name="delete_campaign" class="text-sm bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded">Delete</button>
@@ -501,6 +603,59 @@ if ($is_logged_in) {
                 btnChannels.classList.replace('text-white', 'text-slate-200');
             }
         }
+        function editCampaign(campaign) {
+            const formId = document.getElementById('edit_campaign_id');
+            const titleInput = document.querySelector('input[name="title"]');
+            const teamAInput = document.getElementById('team_a');
+            const teamBInput = document.getElementById('team_b');
+            const timeInput = document.querySelector('input[name="match_time"]');
+            const prizeInput = document.querySelector('input[name="prize_image_url"]');
+            const fbInput = document.querySelector('input[name="fb_post_link"]');
+            const submitBtn = document.getElementById('campaign-submit-btn');
+            const cancelBtn = document.getElementById('campaign-cancel-btn');
+
+            if (formId) formId.value = campaign.id || '';
+            if (titleInput) titleInput.value = campaign.title || '';
+            if (teamAInput) teamAInput.value = campaign.team_a || '';
+            if (teamBInput) teamBInput.value = campaign.team_b || '';
+            if (timeInput) timeInput.value = campaign.match_time ? campaign.match_time.replace(' ', 'T').slice(0, 16) : '';
+            if (prizeInput) prizeInput.value = campaign.prize_image_url || '';
+            if (fbInput) fbInput.value = campaign.fb_post_link || '';
+            if (submitBtn) submitBtn.textContent = 'Update Campaign';
+            if (cancelBtn) cancelBtn.classList.remove('hidden');
+            if (window.jQuery && window.jQuery.fn.select2) {
+                $(teamAInput).val(campaign.team_a).trigger('change');
+                $(teamBInput).val(campaign.team_b).trigger('change');
+            }
+            titleInput?.scrollIntoView({behavior: 'smooth', block: 'center'});
+        }
+
+        function resetCampaignForm() {
+            const formId = document.getElementById('edit_campaign_id');
+            const titleInput = document.querySelector('input[name="title"]');
+            const teamAInput = document.getElementById('team_a');
+            const teamBInput = document.getElementById('team_b');
+            const timeInput = document.querySelector('input[name="match_time"]');
+            const prizeInput = document.querySelector('input[name="prize_image_url"]');
+            const fbInput = document.querySelector('input[name="fb_post_link"]');
+            const submitBtn = document.getElementById('campaign-submit-btn');
+            const cancelBtn = document.getElementById('campaign-cancel-btn');
+
+            if (formId) formId.value = '';
+            if (titleInput) titleInput.value = '';
+            if (teamAInput) teamAInput.value = '';
+            if (teamBInput) teamBInput.value = '';
+            if (timeInput) timeInput.value = '';
+            if (prizeInput) prizeInput.value = '';
+            if (fbInput) fbInput.value = '';
+            if (submitBtn) submitBtn.textContent = 'Create Campaign';
+            if (cancelBtn) cancelBtn.classList.add('hidden');
+            if (window.jQuery && window.jQuery.fn.select2) {
+                $(teamAInput).val('').trigger('change');
+                $(teamBInput).val('').trigger('change');
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             if (window.jQuery && window.jQuery.fn.select2) {
                 $('#team_a').select2({

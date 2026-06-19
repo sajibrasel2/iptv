@@ -7,10 +7,12 @@ header('Content-Type: application/json');
 $method = $_SERVER['REQUEST_METHOD'];
 
 function normalizeBanglaDigits($value) {
-    return strtr($value, [
+    $mapping = [
         '০' => '0', '১' => '1', '২' => '2', '৩' => '3', '৪' => '4',
         '৫' => '5', '৬' => '6', '৭' => '7', '৮' => '8', '৯' => '9'
-    ]);
+    ];
+    $normalized = strtr($value, $mapping);
+    return preg_replace('/[^\d\+]/', '', $normalized);
 }
 
 function ensurePredictionSchema(PDO $pdo) {
@@ -84,10 +86,7 @@ if ($method === 'POST') {
     $duplicateCount = $duplicateStmt->fetchColumn();
     if ($duplicateCount > 0) {
         http_response_code(400);
-        echo json_encode([
-            'error' => 'duplicate_phone',
-            'message' => 'This phone number has already submitted a prediction for this match.'
-        ]);
+        echo json_encode(['success' => false, 'message' => 'This mobile number has already submitted a prediction for this match.']);
         exit;
     }
 
