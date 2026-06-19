@@ -182,20 +182,12 @@ header("Expires: 0");
                         </div>
                         <div class="space-y-3">
                             <p class="text-xs text-slate-400 uppercase tracking-wider">Share to unlock:</p>
-                            <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                                <button type="button" onclick="handleShareClick('facebook')" class="flex items-center justify-center gap-2 px-3 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 transition text-white text-[11px] font-semibold min-h-[46px]">
-                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M22 12C22 6.48 17.52 2 12 2S2 6.48 2 12c0 4.84 3.44 8.85 7.94 9.8v-6.93H7.08v-2.87h2.86V9.61c0-2.83 1.68-4.4 4.26-4.4 1.24 0 2.54.22 2.54.22v2.8h-1.44c-1.42 0-1.86.88-1.86 1.78v2.14h3.17l-.51 2.87h-2.66v6.93C18.56 20.85 22 16.84 22 12z"/></svg>
-                                Facebook
-                            </button>
-                            <button type="button" onclick="handleShareClick('messenger')" class="flex items-center justify-center gap-2 px-3 py-2 rounded-2xl bg-[#0084FF] hover:bg-[#0074e6] transition text-white text-[11px] font-semibold">
-                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.48 2 2 5.85 2 10.5c0 2.44 1.21 4.66 3.22 6.16L4 22l4.43-2.34c1.08.3 2.21.46 3.57.46 5.52 0 10-3.85 10-8.5S17.52 2 12 2zm-.73 11.5L8 9.5l-2.5 4.5 4.5-2.25 2.5 2 4.5-4.5-5.73 2.75z"/></svg>
-                                Messenger
-                            </button>
-                            <button type="button" onclick="handleShareClick('whatsapp')" class="flex items-center justify-center gap-2 px-3 py-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 transition text-white text-[11px] font-semibold">
-                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M20.52 3.48A11.94 11.94 0 0012 0C5.37 0 0 5.37 0 12c0 2.1.55 4.16 1.6 5.96L0 24l6.2-1.62A11.94 11.94 0 0012 24c6.63 0 12-5.37 12-12 0-3.2-1.24-6.2-3.48-8.52zM12 21.6c-1.84 0-3.65-.5-5.2-1.45l-.37-.22-3.68.96.98-3.57-.24-.37A9.54 9.54 0 012.4 12c0-5.24 4.26-9.5 9.5-9.5 2.54 0 4.92.99 6.72 2.8A9.44 9.44 0 0121.5 12c0 5.24-4.26 9.6-9.5 9.6zm5.35-7.17c-.27-.14-1.6-.79-1.85-.89-.24-.11-.42-.15-.6.14-.18.28-.7.89-.85 1.07-.16.18-.32.21-.59.07-.27-.14-1.15-.42-2.18-1.35-.81-.72-1.36-1.61-1.52-1.88-.16-.28-.02-.43.12-.57.12-.12.27-.3.41-.45.13-.15.17-.27.26-.45.08-.18.04-.33-.02-.46-.07-.13-.6-1.44-.82-1.97-.22-.52-.45-.45-.61-.46-.16-.01-.35-.01-.54-.01-.18 0-.46.07-.7.33-.24.26-.92.9-.92 2.2s.94 2.55 1.07 2.72c.12.17 1.86 2.85 4.52 3.99 2.51 1.08 2.84.93 3.35.87.5-.05 1.6-.66 1.83-1.3.23-.64.23-1.19.16-1.3-.07-.12-.24-.18-.51-.31z"/></svg>
-                                WhatsApp
-                            </button>
-                            <button type="button" onclick="handleShareClick('telegram')" class="flex items-center justify-center gap-2 px-3 py-2 rounded-2xl bg-sky-500 hover:bg-sky-600 transition text-white text-[11px] font-semibold">
+                            <div class="grid grid-cols-2 gap-2 sm:grid-cols-2">
+                                <button type="button" onclick="handleShareClick('whatsapp')" class="flex items-center justify-center gap-2 px-3 py-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 transition text-white text-[11px] font-semibold">
+                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M20.52 3.48A11.94 11.94 0 0012 0C5.37 0 0 5.37 0 12c0 2.1.55 4.16 1.6 5.96L0 24l6.2-1.62A11.94 11.94 0 0012 24c6.63 0 12-5.37 12-12 0-3.2-1.24-6.2-3.48-8.52zM12 21.6c-1.84 0-3.65-.5-5.2-1.45l-.37-.22-3.68.96.98-3.57-.24-.37A9.54 9.54 0 012.4 12c0-5.24 4.26-9.5 9.5-9.5 2.54 0 4.92.99 6.72 2.8A9.44 9.44 0 0121.5 12c0 5.24-4.26 9.6-9.5 9.6zm5.35-7.17c-.27-.14-1.6-.79-1.85-.89-.24-.11-.42-.15-.6.14-.18.28-.7.89-.85 1.07-.16.18-.32.21-.59.07-.27-.14-1.15-.42-2.18-1.35-.81-.72-1.36-1.61-1.52-1.88-.16-.28-.02-.43.12-.57.12-.12.27-.3.41-.45.13-.15.17-.27.26-.45.08-.18.04-.33-.02-.46-.07-.13-.6-1.44-.82-1.97-.22-.52-.45-.45-.61-.46-.16-.01-.35-.01-.54-.01-.18 0-.46.07-.7.33-.24.26-.92.9-.92 2.2s.94 2.55 1.07 2.72c.12.17 1.86 2.85 4.52 3.99 2.51 1.08 2.84.93 3.35.87.5-.05 1.6-.66 1.83-1.3.23-.64.23-1.19.16-1.3-.07-.12-.24-.18-.51-.31z"/></svg>
+                                    WhatsApp
+                                </button>
+                                <button type="button" onclick="handleShareClick('telegram')" class="flex items-center justify-center gap-2 px-3 py-2 rounded-2xl bg-sky-500 hover:bg-sky-600 transition text-white text-[11px] font-semibold">
                                 <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.25 3.35 9.69 8.06 11.32.59.11.8-.26.8-.58 0-.29-.01-1.05-.01-2.06-3.28.71-3.98-1.58-3.98-1.58-.53-1.35-1.28-1.71-1.28-1.71-1.05-.72.08-.71.08-.71 1.16.08 1.77 1.2 1.77 1.2 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.62-.3-5.38-1.31-5.38-5.82 0-1.29.46-2.35 1.22-3.18-.12-.3-.53-1.5.12-3.13 0 0 .99-.32 3.24 1.21a11.32 11.32 0 012.95-.4c1 .01 2.01.14 2.95.4 2.24-1.53 3.23-1.21 3.23-1.21.65 1.63.24 2.83.12 3.13.76.83 1.22 1.9 1.22 3.18 0 4.52-2.76 5.51-5.39 5.81.41.35.77 1.04.77 2.1 0 1.52-.01 2.75-.01 3.12 0 .32.2.7.81.58A12.01 12.01 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
                                 Telegram
                             </button>
@@ -204,7 +196,7 @@ header("Expires: 0");
                     </div>
                     <div class="hidden">
                         <input type="checkbox" id="pred-share" required class="mt-1 w-4 h-4 rounded border-slate-700 text-indigo-500 bg-slate-900">
-                        <label for="pred-share" class="text-xs text-slate-400 leading-relaxed">I confirm that I have shared this app in 3 Facebook groups/timelines.</label>
+                        <label for="pred-share" class="text-xs text-slate-400 leading-relaxed">I confirm I have shared this app via WhatsApp or Telegram.</label>
                     </div>
                     <button type="submit" id="pred-submit-btn" disabled class="w-full bg-indigo-500 disabled:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-indigo-600 text-white font-bold py-3.5 rounded-xl transition-colors shadow-lg shadow-indigo-500/25 flex justify-center items-center">
                         Submit Prediction
@@ -240,6 +232,34 @@ header("Expires: 0");
             });
         }
 
+        const countryFlagMap = {
+            'Argentina': '🇦🇷', 'Australia': '🇦🇺', 'Austria': '🇦🇹', 'Belgium': '🇧🇪', 'Brazil': '🇧🇷',
+            'Canada': '🇨🇦', 'Chile': '🇨🇱', 'China': '🇨🇳', 'Colombia': '🇨🇴', 'Croatia': '🇭🇷',
+            'Czech Republic': '🇨🇿', 'Denmark': '🇩🇰', 'Egypt': '🇪🇬', 'England': '🏴', 'France': '🇫🇷',
+            'Germany': '🇩🇪', 'Ghana': '🇬🇭', 'India': '🇮🇳', 'Italy': '🇮🇹', 'Japan': '🇯🇵',
+            'Mexico': '🇲🇽', 'Morocco': '🇲🇦', 'Netherlands': '🇳🇱', 'Nigeria': '🇳🇬', 'Poland': '🇵🇱',
+            'Portugal': '🇵🇹', 'Qatar': '🇶🇦', 'Russia': '🇷🇺', 'Saudi Arabia': '🇸🇦', 'Scotland': '🏴',
+            'Serbia': '🇷🇸', 'South Korea': '🇰🇷', 'Spain': '🇪🇸', 'Sweden': '🇸🇪', 'Switzerland': '🇨🇭',
+            'Turkey': '🇹🇷', 'Ukraine': '🇺🇦', 'United States': '🇺🇸', 'USA': '🇺🇸', 'Wales': '🏴',
+            'Bangladesh': '🇧🇩', 'UAE': '🇦🇪', 'South Africa': '🇿🇦', 'Ireland': '🇮🇪', 'Hungary': '🇭🇺',
+            'Romania': '🇷🇴', 'Greece': '🇬🇷', 'Portugal': '🇵🇹', 'Netherlands': '🇳🇱', 'Belgium': '🇧🇪'
+        };
+
+        function getCountryFlag(countryName) {
+            if (!countryName) return '';
+            const name = countryName.trim();
+            return countryFlagMap[name] || '';
+        }
+
+        function teamLabelWithFlag(countryName) {
+            const flag = getCountryFlag(countryName);
+            const safeName = countryName || '';
+            if (flag) {
+                return `<span class="animated-flag">${flag}</span>${safeName}`;
+            }
+            return safeName;
+        }
+
         function parseDhakaMatchTime(matchTime) {
             if (!matchTime) return null;
             const utcIso = matchTime.replace(' ', 'T') + '+06:00';
@@ -250,6 +270,13 @@ header("Expires: 0");
         function isPredictionExpired(matchTime) {
             const deadline = parseDhakaMatchTime(matchTime);
             return deadline ? Date.now() > deadline.getTime() : false;
+        }
+
+        function formatDeadlineLabel(matchTime) {
+            const deadline = parseDhakaMatchTime(matchTime);
+            if (!deadline) return 'Deadline unavailable';
+            const options = { day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit', hour12: true };
+            return `⏱️ Deadline: ${deadline.toLocaleString('en-US', options)}`;
         }
 
         function updatePredictionDeadlineState(matchTime) {
@@ -263,7 +290,7 @@ header("Expires: 0");
                     badge.classList.remove('hidden', 'bg-emerald-500/15', 'text-emerald-300', 'border-emerald-500/20');
                     badge.classList.add('inline-flex', 'bg-red-500/15', 'text-red-300', 'border-red-500/20');
                 } else {
-                    badge.innerText = 'Open for Predictions';
+                    badge.innerText = formatDeadlineLabel(matchTime);
                     badge.classList.remove('hidden', 'bg-red-500/15', 'text-red-300', 'border-red-500/20');
                     badge.classList.add('inline-flex', 'bg-emerald-500/15', 'text-emerald-300', 'border-emerald-500/20');
                 }
@@ -354,14 +381,6 @@ header("Expires: 0");
         window.handleShareClick = (platform) => {
             const message = encodeURIComponent('Watch Live Sports and Predict to Win a Jersey! Join now: https://techandclick.site/iptv/');
             const shareMap = {
-                facebook: {
-                    intent: 'https://www.facebook.com/sharer/sharer.php?u=https://techandclick.site/iptv/',
-                    fallback: 'https://www.facebook.com/sharer/sharer.php?u=https://techandclick.site/iptv/'
-                },
-                messenger: {
-                    intent: 'fb-messenger://share/?link=https://techandclick.site/iptv/&app_id=YOUR_APP_ID',
-                    fallback: 'https://www.facebook.com/sharer/sharer.php?u=https://techandclick.site/iptv/'
-                },
                 whatsapp: {
                     intent: 'whatsapp://send?text=' + message,
                     fallback: 'https://api.whatsapp.com/send?text=' + message
@@ -410,6 +429,7 @@ header("Expires: 0");
                     const expired = predData.is_expired === true;
                     const statusLabel = expired ? 'CLOSED' : 'PLAY';
                     const statusClasses = expired ? 'bg-slate-500 text-slate-200' : 'bg-white text-indigo-600';
+                    const deadlineLabel = !expired ? formatDeadlineLabel(predData.match_time) : 'Prediction Closed';
                     const bannerHtml = `
                         <div class="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl p-4 mb-4 shadow-[0_8px_30px_rgba(99,102,241,0.3)] ${expired ? 'cursor-default opacity-90' : 'cursor-pointer hover:scale-[1.02]'} transition transform" 
                              ${expired ? '' : `onclick="openPredictionModal('${predData.id}', '${predData.team_a}', '${predData.team_b}', '${predData.prize_image_url || ''}', '${predData.match_time || ''}', true)"`}>
@@ -418,7 +438,8 @@ header("Expires: 0");
                                     <span class="text-3xl drop-shadow-md">🎁</span>
                                     <div>
                                         <h3 class="text-white font-bold text-lg leading-tight">Predict & Win Jersey!</h3>
-                                        <p class="text-indigo-100 text-xs mt-0.5">${predData.team_a} vs ${predData.team_b}</p>
+                                        <p class="text-indigo-100 text-xs mt-0.5">${teamLabelWithFlag(predData.team_a)} vs ${teamLabelWithFlag(predData.team_b)}</p>
+                                        <p class="text-slate-200 text-[11px] mt-2">${deadlineLabel}</p>
                                     </div>
                                 </div>
                                 <span class="${statusClasses} text-xs font-extrabold px-4 py-2 rounded-full shadow-md">${statusLabel}</span>
@@ -477,8 +498,8 @@ header("Expires: 0");
             document.getElementById('pred-campaign-id').value = id;
             document.getElementById('modal-match-title').innerText = tA + ' vs ' + tB;
             updatePredictionDeadlineState(matchTime);
-            document.getElementById('label-team-a').innerText = tA;
-            document.getElementById('label-team-b').innerText = tB;
+            document.getElementById('label-team-a').innerHTML = teamLabelWithFlag(tA);
+            document.getElementById('label-team-b').innerHTML = teamLabelWithFlag(tB);
             document.getElementById('label-score-a').innerText = tA + ' Goals';
             document.getElementById('label-score-b').innerText = tB + ' Goals';
             const imgEl = document.getElementById('modal-prize-img');
