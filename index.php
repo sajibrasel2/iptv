@@ -160,10 +160,14 @@ header("Expires: 0");
                         </div>
                     </div>
                     <div class="space-y-3">
-                        <div class="grid grid-cols-3 gap-3">
+                        <div class="grid grid-cols-4 gap-3">
                             <button type="button" onclick="handleShareClick('facebook')" class="flex items-center justify-center gap-2 px-3 py-2 rounded-2xl bg-blue-600 hover:bg-blue-700 transition text-white text-[11px] font-semibold">
                                 <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M22 12C22 6.48 17.52 2 12 2S2 6.48 2 12c0 4.84 3.44 8.85 7.94 9.8v-6.93H7.08v-2.87h2.86V9.61c0-2.83 1.68-4.4 4.26-4.4 1.24 0 2.54.22 2.54.22v2.8h-1.44c-1.42 0-1.86.88-1.86 1.78v2.14h3.17l-.51 2.87h-2.66v6.93C18.56 20.85 22 16.84 22 12z"/></svg>
                                 Facebook
+                            </button>
+                            <button type="button" onclick="handleShareClick('messenger')" class="flex items-center justify-center gap-2 px-3 py-2 rounded-2xl bg-[#0084FF] hover:bg-[#0074e6] transition text-white text-[11px] font-semibold">
+                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.48 2 2 5.85 2 10.5c0 2.44 1.21 4.66 3.22 6.16L4 22l4.43-2.34c1.08.3 2.21.46 3.57.46 5.52 0 10-3.85 10-8.5S17.52 2 12 2zm-.73 11.5L8 9.5l-2.5 4.5 4.5-2.25 2.5 2 4.5-4.5-5.73 2.75z"/></svg>
+                                Messenger
                             </button>
                             <button type="button" onclick="handleShareClick('whatsapp')" class="flex items-center justify-center gap-2 px-3 py-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 transition text-white text-[11px] font-semibold">
                                 <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M20.52 3.48A11.94 11.94 0 0012 0C5.37 0 0 5.37 0 12c0 2.1.55 4.16 1.6 5.96L0 24l6.2-1.62A11.94 11.94 0 0012 24c6.63 0 12-5.37 12-12 0-3.2-1.24-6.2-3.48-8.52zM12 21.6c-1.84 0-3.65-.5-5.2-1.45l-.37-.22-3.68.96.98-3.57-.24-.37A9.54 9.54 0 012.4 12c0-5.24 4.26-9.5 9.5-9.5 2.54 0 4.92.99 6.72 2.8A9.44 9.44 0 0121.5 12c0 5.24-4.26 9.6-9.5 9.6zm5.35-7.17c-.27-.14-1.6-.79-1.85-.89-.24-.11-.42-.15-.6.14-.18.28-.7.89-.85 1.07-.16.18-.32.21-.59.07-.27-.14-1.15-.42-2.18-1.35-.81-.72-1.36-1.61-1.52-1.88-.16-.28-.02-.43.12-.57.12-.12.27-.3.41-.45.13-.15.17-.27.26-.45.08-.18.04-.33-.02-.46-.07-.13-.6-1.44-.82-1.97-.22-.52-.45-.45-.61-.46-.16-.01-.35-.01-.54-.01-.18 0-.46.07-.7.33-.24.26-.92.9-.92 2.2s.94 2.55 1.07 2.72c.12.17 1.86 2.85 4.52 3.99 2.51 1.08 2.84.93 3.35.87.5-.05 1.6-.66 1.83-1.3.23-.64.23-1.19.16-1.3-.07-.12-.24-.18-.51-.31z"/></svg>
@@ -196,6 +200,30 @@ header("Expires: 0");
     <script>
         // Share State
         let shareClicks = 0;
+
+        const predictionStateKeys = {
+            name: 'prediction_name',
+            phone: 'prediction_phone',
+            team: 'prediction_team',
+            shares: 'prediction_shareClicks'
+        };
+
+        function savePredictionState() {
+            const name = document.getElementById('pred-name')?.value || '';
+            const phone = document.getElementById('pred-phone')?.value || '';
+            const selectedTeam = document.querySelector('input[name="predicted_team"]:checked');
+            const team = selectedTeam ? selectedTeam.value : '';
+            localStorage.setItem(predictionStateKeys.name, name);
+            localStorage.setItem(predictionStateKeys.phone, phone);
+            localStorage.setItem(predictionStateKeys.team, team);
+            localStorage.setItem(predictionStateKeys.shares, String(shareClicks));
+        }
+
+        function bindPredictionStateListeners() {
+            document.getElementById('pred-name')?.addEventListener('input', savePredictionState);
+            document.getElementById('pred-phone')?.addEventListener('input', savePredictionState);
+            document.querySelectorAll('input[name="predicted_team"]').forEach(el => el.addEventListener('change', savePredictionState));
+        }
 
         // Tab Logic
         const sections = { home: document.getElementById('home-section'), favorites: document.getElementById('favorites-section'), profile: document.getElementById('profile-section') };
@@ -232,6 +260,7 @@ header("Expires: 0");
         window.handleShareClick = (platform) => {
             const shareUrls = {
                 facebook: 'https://www.facebook.com/sharer/sharer.php?u=https://techandclick.site/iptv/',
+                messenger: 'fb-messenger://share/?link=https://techandclick.site/iptv/',
                 whatsapp: 'https://api.whatsapp.com/send?text=Watch Live Sports and Predict to Win a Jersey! Join now: https://techandclick.site/iptv/',
                 telegram: 'https://t.me/share/url?url=https://techandclick.site/iptv/&text=Watch Live Sports and Predict to Win a Jersey!'
             };
@@ -251,6 +280,7 @@ header("Expires: 0");
                         submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
                     }
                 }
+                savePredictionState();
             }
         };
 
@@ -333,6 +363,38 @@ header("Expires: 0");
             document.getElementById('label-team-b').innerText = tB;
             const imgEl = document.getElementById('modal-prize-img');
             if(img) { imgEl.src = img; imgEl.classList.remove('hidden'); } else { imgEl.classList.add('hidden'); }
+
+            const savedName = localStorage.getItem(predictionStateKeys.name);
+            const savedPhone = localStorage.getItem(predictionStateKeys.phone);
+            const savedTeam = localStorage.getItem(predictionStateKeys.team);
+            const savedShares = parseInt(localStorage.getItem(predictionStateKeys.shares), 10) || 0;
+
+            if (savedName) document.getElementById('pred-name').value = savedName;
+            if (savedPhone) document.getElementById('pred-phone').value = savedPhone;
+            if (savedTeam) {
+                const savedRadio = document.querySelector(`input[name="predicted_team"][value="${savedTeam}"]`);
+                if (savedRadio) savedRadio.checked = true;
+            }
+
+            shareClicks = Math.min(savedShares, 3);
+            const shareCountEl = document.getElementById('share-count');
+            const predShare = document.getElementById('pred-share');
+            const submitBtn = document.getElementById('pred-submit-btn');
+            if (shareCountEl) shareCountEl.innerText = shareClicks;
+            if (shareClicks >= 3) {
+                if (predShare) predShare.checked = true;
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
+            } else {
+                if (predShare) predShare.checked = false;
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                }
+            }
+
             document.getElementById('prediction-form').classList.remove('hidden');
             document.getElementById('pred-success').classList.add('hidden');
             document.getElementById('prediction-modal').classList.remove('hidden');
@@ -351,6 +413,10 @@ header("Expires: 0");
                 submitBtn.disabled = true;
                 submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
             }
+            localStorage.removeItem(predictionStateKeys.name);
+            localStorage.removeItem(predictionStateKeys.phone);
+            localStorage.removeItem(predictionStateKeys.team);
+            localStorage.removeItem(predictionStateKeys.shares);
         };
 
         document.getElementById('prediction-form').addEventListener('submit', async (e) => {
@@ -370,6 +436,10 @@ header("Expires: 0");
                     })
                 });
                 if(res.ok) {
+                    localStorage.removeItem(predictionStateKeys.name);
+                    localStorage.removeItem(predictionStateKeys.phone);
+                    localStorage.removeItem(predictionStateKeys.team);
+                    localStorage.removeItem(predictionStateKeys.shares);
                     document.getElementById('prediction-form').classList.add('hidden');
                     document.getElementById('pred-success').classList.remove('hidden');
                     setTimeout(closePredictionModal, 3500);
