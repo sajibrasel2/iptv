@@ -234,11 +234,128 @@ header("Expires: 0");
 
     <!-- Application Logic -->
     <script>
-        document.addEventListener('DOMContentLoaded', async () => {
-            const container = document.getElementById('cards-container');
-            const loading = document.getElementById('loading');
+document.addEventListener('DOMContentLoaded', async () => {
+  const container = document.getElementById('cards-container');
+  const loading = document.getElementById('loading');
+
+  // Load channel data
+  
+  try {
+    const resp = await fetch('api_dynamic.php?t=' + Date.now());
+    const data = await resp.json();
+    sites = data.channels || [];
+    window.activeAds = (data.ads || []).map(ad => ad.ad_url);
+  } catch (err) {
+    console.error('Failed to load channels:', err);
+  }
+
+  // Load prediction campaign
+  try {
+    const predResp = await fetch('api_predictions.php');
+    const predData = await predResp.json();
+    if (predData && predData.active_campaign) {
+      const home = document.getElementById('home-section');
+      const banner = document.createElement('div');
+      banner.id = 'prediction-banner';
+      banner.className = 'flex items-center justify-between bg-gradient-to-r from-indigo-600 to-purple-600 p-4 rounded-xl mb-4 text-white shadow-lg cursor-pointer';
+      banner.innerHTML = `
+        <div>
+          <h2 class="text-lg font-bold">🎁 Predict &amp; Win Jersey!</h2>
+          <p class="text-sm">Predict the match outcome and stand a chance to win the jersey.</p>
+        </div>
+        <button id="open-prediction-modal" class="bg-white text-indigo-600 font-semibold py-2 px-4 rounded-full hover:bg-gray-100 transition">Predict Now</button>
+      `;
+      home.prepend(banner);
+      document.getElementById('open-prediction-modal')
+        .addEventListener('click', () => openPredictionModal(predData.active_campaign));
+    }
+  } catch (e) {
+    console.error('Prediction fetch error:', e);
+  }
+
+  // Remove spinner
+  if (loading) loading.remove();
+
+  // Render channels
+  if (sites.length === 0) {
+    container.innerHTML = '<p class="text-center text-slate-400 py-10">No channels available at the moment.</p>';
+    return;
+  }
+
+  sites.forEach((site, idx) => {
+    const delay = idx * 100;
+    const card = `
+      <div class="relative group bg-slate-800/50 p-[1px] rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_8px_30px_rgba(99,102,241,0.15)] opacity-0 animate-fade-in-up cursor-pointer"
+           style="animation-delay:${delay}ms;animation-fill-mode:forwards"
+           onclick="handleAdClick('${site.target_url}')">
+        <div class="absolute inset-0 bg-gradient-to-br from-indigo-500/20 via-purple-500/5 to-transparent opacity-50 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
+        <div class="relative bg-slate-800/90 backdrop-blur-sm rounded-[15px] p-5 flex flex-col justify-between space-y-5">
+          <div class="flex justify-between items-start gap-3">
+            <div>
+              <h2 class="text-xl font-bold text-white mb-1 group-hover:text-indigo-400 transition-colors">${site.display_name}</h2>
+              <p class="text-sm text-slate-400 leading-relaxed">Live Broadcasting</p>
+            </div>
+            <div class="flex items-center space-x-1.5 bg-red-500/10 px-2.5 py-1 rounded-full border border-red-500/20 shrink-0">
+              <span class="relative flex h-2 w-2">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+              </span>
+              <span class="text-[10px] font-bold text-red-500 uppercase tracking-widest">Live</span>
+            </div>
+          </div>
+          <div class="w-full relative overflow-hidden flex items-center justify-center space-x-2 bg-indigo-500/10 group-hover:bg-indigo-500 text-indigo-400 group-hover:text-white font-semibold py-3.5 px-4 rounded-xl border border-indigo-500/30 group-hover:border-indigo-500 transition-all duration-300">
+            <div class="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent group-hover:animate-[shimmer_1.5s_infinite]"></div>
+            <span class="relative z-10">Watch Now</span>
+            <svg class="w-4 h-4 relative z-10 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+          </div>
+        </div>
+      </div>
+    `;
+    container.insertAdjacentHTML('beforeend', card);
+  });
+
+  // Navigation handling
+  const sections = {
+    home: document.getElementById('home-section'),
+    favorites: document.getElementById('favorites-section'),
+    profile: document.getElementById('profile-section')
+  };
+  const navButtons = {
+    home: document.getElementById('nav-home'),
+    favorites: document.getElementById('nav-favorites'),
+    profile: document.getElementById('nav-profile')
+  };
+  function switchTab(tab) {
+    Object.keys(sections).forEach(k => sections[k].classList.toggle('hidden', k !== tab));
+    Object.keys(navButtons).forEach(k => {
+      const btn = navButtons[k];
+      if (k === tab) {
+        btn.classList.remove('text-slate-500', 'hover:text-slate-300');
+        btn.classList.add('text-indigo-400');
+        const icon = btn.querySelector('div');
+        if (icon) {
+          icon.classList.add('bg-indigo-500/20');
+          icon.classList.remove('group-hover:bg-white/5');
+        }
+      } else {
+        btn.classList.remove('text-indigo-400');
+        btn.classList.add('text-slate-500', 'hover:text-slate-300');
+        const icon = btn.querySelector('div');
+        if (icon) {
+          icon.classList.remove('bg-indigo-500/20');
+          icon.classList.add('group-hover:bg-white/5');
+        }
+      }
+    });
+  }
+  Object.values(navButtons).forEach(btn => btn && btn.addEventListener('click', () => switchTab(btn.id.split('-')[1])));
+});
+</script>
+        
             
-            let sites = [];
+
+            
+
             
             try {
                 // Fetch dynamic data
@@ -414,7 +531,8 @@ header("Expires: 0");
                     .catch(error => console.log('Service Worker registration failed:', error));
             });
         }
-    </script>
+
+    
 <!-- Prediction Modal -->
 <div id="prediction-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
   <div class="bg-slate-800 rounded-xl w-full max-w-md p-6 relative">
