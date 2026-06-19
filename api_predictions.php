@@ -35,6 +35,22 @@ if ($method === 'POST') {
             exit;
         }
     }
+    // Prevent duplicate submissions for the same campaign and phone number
+    $duplicateStmt = $pdo->prepare("SELECT COUNT(*) AS count FROM prediction_entries WHERE campaign_id = :campaign_id AND user_phone = :user_phone");
+    $duplicateStmt->execute([
+        ':campaign_id' => $data['campaign_id'],
+        ':user_phone'  => $data['user_phone'],
+    ]);
+    $duplicateCount = $duplicateStmt->fetchColumn();
+    if ($duplicateCount > 0) {
+        http_response_code(400);
+        echo json_encode([
+            'error' => 'duplicate_phone',
+            'message' => 'This phone number has already submitted a prediction for this match.'
+        ]);
+        exit;
+    }
+
     // Basic validation (you can extend this)
     $stmt = $pdo->prepare("INSERT INTO prediction_entries (campaign_id, user_name, user_phone, predicted_team, has_shared) VALUES (:campaign_id, :user_name, :user_phone, :predicted_team, :has_shared)");
     $stmt->execute([

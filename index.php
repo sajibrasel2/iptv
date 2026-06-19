@@ -288,6 +288,7 @@ header("Expires: 0");
         document.addEventListener('DOMContentLoaded', async () => {
             const container = document.getElementById('cards-container');
             const loading = document.getElementById('loading');
+            bindPredictionStateListeners();
             
             // 1. Fetch Prediction Banner
             try {
@@ -435,7 +436,7 @@ header("Expires: 0");
                         has_shared: document.getElementById('pred-share').checked
                     })
                 });
-                if(res.ok) {
+                if (res.ok) {
                     localStorage.removeItem(predictionStateKeys.name);
                     localStorage.removeItem(predictionStateKeys.phone);
                     localStorage.removeItem(predictionStateKeys.team);
@@ -443,7 +444,14 @@ header("Expires: 0");
                     document.getElementById('prediction-form').classList.add('hidden');
                     document.getElementById('pred-success').classList.remove('hidden');
                     setTimeout(closePredictionModal, 3500);
-                } else alert('Error submitting prediction.');
+                } else {
+                    const errorData = await res.json().catch(() => null);
+                    if (res.status === 400 && errorData?.error === 'duplicate_phone') {
+                        alert('এই মোবাইল নাম্বারটি দিয়ে ইতিমধ্যে প্রেডিকশন দেওয়া হয়েছে!');
+                    } else {
+                        alert('Error submitting prediction.');
+                    }
+                }
             } catch(err) { alert('Network error.'); }
             btn.innerHTML = 'Submit Prediction'; btn.disabled = false;
         });
