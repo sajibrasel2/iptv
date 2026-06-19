@@ -42,7 +42,7 @@ header("Expires: 0");
     
     <style>
         ::-webkit-scrollbar { width: 0px; background: transparent; }
-        body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
+        body { height: 100dvh; overflow: hidden; -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
         .glass-panel { backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
         .pb-safe { padding-bottom: env(safe-area-inset-bottom, 16px); }
         #bottom-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 448px; z-index: 9999; background-color: #1a1e29; }
@@ -66,7 +66,7 @@ header("Expires: 0");
         <div class="absolute inset-0 bg-black/50"></div>
     </div>
 
-    <div class="w-full max-w-md bg-slate-900/80 h-[100dvh] flex flex-col relative z-10 shadow-[0_0_40px_rgba(0,0,0,0.5)] overflow-hidden sm:border-x sm:border-slate-800 backdrop-blur-xl">
+    <div class="w-full max-w-md bg-slate-900/80 h-[100dvh] flex flex-col relative z-10 shadow-[0_0_40px_rgba(0,0,0,0.5)] overflow-hidden sm:border-x sm:border-slate-800 backdrop-blur-xl" style="overscroll-behavior-y: none;">
         
         <header class="sticky top-0 z-50 glass-panel bg-slate-900/80 border-b border-white/5 px-6 py-4 flex items-center justify-center">
             <div class="px-8 py-2 rounded-full" style="background: radial-gradient(circle, rgba(165, 243, 252, 0.15) 0%, rgba(15, 23, 42, 0) 70%);">
@@ -82,7 +82,7 @@ header("Expires: 0");
             </a>
         </div>
 
-        <main class="flex-1 overflow-y-auto p-4 pb-40 space-y-4 relative">
+        <main class="flex-1 overflow-y-auto p-4 pb-40 space-y-4 relative" style="-webkit-overflow-scrolling: touch;">
             <div class="absolute top-0 left-1/2 -translate-x-1/2 w-full h-64 bg-indigo-500/10 blur-[80px] rounded-full pointer-events-none"></div>
             
             <div id="home-section" class="space-y-4">
