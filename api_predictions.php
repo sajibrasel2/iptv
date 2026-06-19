@@ -2,6 +2,7 @@
 // api_predictions.php
 // Public API for Prediction & Giveaway feature
 require_once __DIR__.'/config.php';
+date_default_timezone_set('Asia/Dhaka');
 header('Content-Type: application/json');
 $method = $_SERVER['REQUEST_METHOD'];
 
@@ -49,6 +50,14 @@ if ($method === 'GET') {
     $stmt = $pdo->prepare("SELECT * FROM prediction_campaigns WHERE status='active' LIMIT 1");
     $stmt->execute();
     $campaign = $stmt->fetch();
+    if ($campaign) {
+        $matchTime = DateTime::createFromFormat('Y-m-d H:i:s', $campaign['match_time'], new DateTimeZone('Asia/Dhaka'));
+        if ($matchTime) {
+            $campaign['is_expired'] = (new DateTime('now', new DateTimeZone('Asia/Dhaka')) > $matchTime);
+        } else {
+            $campaign['is_expired'] = false;
+        }
+    }
     echo json_encode($campaign ?? []);
     exit;
 }
@@ -79,6 +88,25 @@ if ($method === 'POST') {
             'error' => 'duplicate_phone',
             'message' => 'This phone number has already submitted a prediction for this match.'
         ]);
+        exit;
+    }
+
+    $campaignStmt = $pdo->prepare("SELECT match_time FROM prediction_campaigns WHERE id = :id LIMIT 1");
+    $campaignStmt->execute([':id' => $data['campaign_id']]);
+    $campaign = $campaignStmt->fetch();
+    if (!$campaign) {
+        http_response_code(404);
+        echo json_encode(['error' => 'campaign_not_found', 'message' => 'Prediction campaign not found']);
+        exit;
+    }
+    $matchTime = DateTime::createFromFormat('Y-m-d H:i:s', $campaign['match_time'], new DateTimeZone('Asia/Dhaka'));
+    if (!$matchTime) {
+        $matchTime = new DateTime($campaign['match_time'], new DateTimeZone('Asia/Dhaka'));
+    }
+    $currentTime = new DateTime('now', new DateTimeZone('Asia/Dhaka'));
+    if ($currentTime > $matchTime) {
+        http_response_code(400);
+        echo json_encode(['error' => 'prediction_closed', 'message' => 'Prediction time is over']);
         exit;
     }
 

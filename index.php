@@ -146,6 +146,7 @@ header("Expires: 0");
                     <img id="modal-prize-img" src="" class="h-24 mx-auto object-contain drop-shadow-md hidden mb-2">
                     <h3 class="text-xl font-bold text-white mb-1">Make Your Prediction</h3>
                     <p id="modal-match-title" class="text-indigo-400 text-sm font-semibold"></p>
+                    <span id="prediction-status-badge" class="hidden mt-2 inline-flex items-center justify-center rounded-full border px-3 py-1 text-xs font-semibold tracking-wide"></span>
                 </div>
                 <form id="prediction-form" class="space-y-4">
                     <input type="hidden" id="pred-campaign-id">
@@ -221,6 +222,8 @@ header("Expires: 0");
     <script>
         // Share State
         let shareClicks = 0;
+        let predictionMatchTime = null;
+        let predictionExpired = false;
 
         const predictionStateKeys = {
             name: 'prediction_name',
@@ -235,6 +238,51 @@ header("Expires: 0");
             return value.replace(/[০১২৩৪৫৬৭৮৯]/g, function(digit) {
                 return '০১২৩৪৫৬৭৮৯'.indexOf(digit);
             });
+        }
+
+        function parseDhakaMatchTime(matchTime) {
+            if (!matchTime) return null;
+            const utcIso = matchTime.replace(' ', 'T') + '+06:00';
+            const dt = new Date(utcIso);
+            return isNaN(dt.getTime()) ? null : dt;
+        }
+
+        function isPredictionExpired(matchTime) {
+            const deadline = parseDhakaMatchTime(matchTime);
+            return deadline ? Date.now() > deadline.getTime() : false;
+        }
+
+        function updatePredictionDeadlineState(matchTime) {
+            predictionMatchTime = matchTime;
+            predictionExpired = isPredictionExpired(matchTime);
+            const badge = document.getElementById('prediction-status-badge');
+            const btn = document.getElementById('pred-submit-btn');
+            if (badge) {
+                if (predictionExpired) {
+                    badge.innerText = 'Prediction Closed';
+                    badge.classList.remove('hidden', 'bg-emerald-500/15', 'text-emerald-300', 'border-emerald-500/20');
+                    badge.classList.add('inline-flex', 'bg-red-500/15', 'text-red-300', 'border-red-500/20');
+                } else {
+                    badge.innerText = 'Open for Predictions';
+                    badge.classList.remove('hidden', 'bg-red-500/15', 'text-red-300', 'border-red-500/20');
+                    badge.classList.add('inline-flex', 'bg-emerald-500/15', 'text-emerald-300', 'border-emerald-500/20');
+                }
+            }
+            if (btn) {
+                if (predictionExpired) {
+                    btn.disabled = true;
+                    btn.classList.add('opacity-50', 'cursor-not-allowed');
+                    btn.innerText = 'Time Expired';
+                } else if (shareClicks >= 3) {
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    btn.innerText = 'Submit Prediction';
+                } else {
+                    btn.disabled = true;
+                    btn.classList.add('opacity-50', 'cursor-not-allowed');
+                    btn.innerText = 'Submit Prediction';
+                }
+            }
         }
 
         function savePredictionState() {
@@ -339,7 +387,7 @@ header("Expires: 0");
                 if (shareCountEl) shareCountEl.innerText = shareClicks;
                 if (shareClicks >= 3) {
                     if (predShare) predShare.checked = true;
-                    if (submitBtn) {
+                    if (submitBtn && !predictionExpired) {
                         submitBtn.disabled = false;
                         submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
                     }
@@ -359,9 +407,12 @@ header("Expires: 0");
                 const predRes = await fetch('api_predictions.php');
                 const predData = await predRes.json();
                 if (predData && predData.id && predData.status === 'active') {
+                    const expired = predData.is_expired === true;
+                    const statusLabel = expired ? 'CLOSED' : 'PLAY';
+                    const statusClasses = expired ? 'bg-slate-500 text-slate-200' : 'bg-white text-indigo-600';
                     const bannerHtml = `
-                        <div class="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl p-4 mb-4 shadow-[0_8px_30px_rgba(99,102,241,0.3)] cursor-pointer transform transition hover:scale-[1.02]" 
-                             onclick="openPredictionModal('${predData.id}', '${predData.team_a}', '${predData.team_b}', '${predData.prize_image_url || ''}')">
+                        <div class="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl p-4 mb-4 shadow-[0_8px_30px_rgba(99,102,241,0.3)] ${expired ? 'cursor-default opacity-90' : 'cursor-pointer hover:scale-[1.02]'} transition transform" 
+                             ${expired ? '' : `onclick="openPredictionModal('${predData.id}', '${predData.team_a}', '${predData.team_b}', '${predData.prize_image_url || ''}', '${predData.match_time || ''}', true)"`}>
                             <div class="flex items-center justify-between">
                                 <div class="flex items-center space-x-3">
                                     <span class="text-3xl drop-shadow-md">🎁</span>
@@ -370,7 +421,7 @@ header("Expires: 0");
                                         <p class="text-indigo-100 text-xs mt-0.5">${predData.team_a} vs ${predData.team_b}</p>
                                     </div>
                                 </div>
-                                <span class="bg-white text-indigo-600 text-xs font-extrabold px-4 py-2 rounded-full shadow-md animate-pulse">PLAY</span>
+                                <span class="${statusClasses} text-xs font-extrabold px-4 py-2 rounded-full shadow-md">${statusLabel}</span>
                             </div>
                         </div>
                     `;
@@ -421,9 +472,11 @@ header("Expires: 0");
         });
 
         // Modal Functions
-        window.openPredictionModal = (id, tA, tB, img) => {
+        window.openPredictionModal = (id, tA, tB, img, matchTime = null) => {
+            predictionMatchTime = matchTime;
             document.getElementById('pred-campaign-id').value = id;
             document.getElementById('modal-match-title').innerText = tA + ' vs ' + tB;
+            updatePredictionDeadlineState(matchTime);
             document.getElementById('label-team-a').innerText = tA;
             document.getElementById('label-team-b').innerText = tB;
             document.getElementById('label-score-a').innerText = tA + ' Goals';
@@ -457,8 +510,13 @@ header("Expires: 0");
             if (shareClicks >= 3) {
                 if (predShare) predShare.checked = true;
                 if (submitBtn) {
-                    submitBtn.disabled = false;
-                    submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    if (!predictionExpired) {
+                        submitBtn.disabled = false;
+                        submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    } else {
+                        submitBtn.disabled = true;
+                        submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                    }
                 }
             } else {
                 if (predShare) predShare.checked = false;
@@ -496,6 +554,10 @@ header("Expires: 0");
 
         document.getElementById('prediction-form').addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (predictionExpired) {
+                alert('Prediction time is over.');
+                return;
+            }
             const btn = document.getElementById('pred-submit-btn');
             btn.innerHTML = 'Submitting...'; btn.disabled = true;
             try {
