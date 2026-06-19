@@ -59,9 +59,13 @@ header("Expires: 0");
         }
     });
 </script>
-<body class="bg-black text-slate-100 min-h-screen font-sans antialiased selection:bg-indigo-500 selection:text-white flex justify-center">
+<body class="bg-black text-slate-100 min-h-screen font-sans antialiased selection:bg-indigo-500 selection:text-white flex justify-center relative overflow-hidden">
+    <div class="fixed inset-0 -z-10 overflow-hidden">
+        <div class="absolute inset-0 bg-cover bg-center" style="background-image: url('wc2026.jpg'); filter: blur(20px); transform: scale(1.05);"></div>
+        <div class="absolute inset-0 bg-black/50"></div>
+    </div>
 
-    <div class="w-full max-w-md bg-slate-900 min-h-[100dvh] flex flex-col relative shadow-[0_0_40px_rgba(0,0,0,0.5)] overflow-hidden sm:border-x sm:border-slate-800">
+    <div class="w-full max-w-md bg-slate-900/80 min-h-[100dvh] flex flex-col relative shadow-[0_0_40px_rgba(0,0,0,0.5)] overflow-hidden sm:border-x sm:border-slate-800 backdrop-blur-xl">
         
         <header class="sticky top-0 z-50 glass-panel bg-slate-900/80 border-b border-white/5 px-6 py-4 flex items-center justify-center">
             <div class="px-8 py-2 rounded-full" style="background: radial-gradient(circle, rgba(165, 243, 252, 0.15) 0%, rgba(15, 23, 42, 0) 70%);">
