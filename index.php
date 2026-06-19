@@ -164,19 +164,20 @@ header("Expires: 0");
                         </div>
                     </div>
                     <div class="space-y-3">
-                        <div class="grid grid-cols-2 gap-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
-                                <label class="block text-xs text-slate-400 uppercase tracking-wider mb-2">Team A Goals</label>
-                                <input type="number" id="pred-score-a" min="0" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:border-indigo-500 outline-none" placeholder="0">
+                                <label id="label-score-a" class="block text-xs text-slate-400 uppercase tracking-wider mb-2">Team A Goals</label>
+                                <input type="number" id="pred-score-a" min="0" required class="w-full bg-slate-900 border border-slate-700 rounded-2xl px-4 py-4 text-white text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none" placeholder="0">
                             </div>
                             <div>
-                                <label class="block text-xs text-slate-400 uppercase tracking-wider mb-2">Team B Goals</label>
-                                <input type="number" id="pred-score-b" min="0" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:border-indigo-500 outline-none" placeholder="0">
+                                <label id="label-score-b" class="block text-xs text-slate-400 uppercase tracking-wider mb-2">Team B Goals</label>
+                                <input type="number" id="pred-score-b" min="0" required class="w-full bg-slate-900 border border-slate-700 rounded-2xl px-4 py-4 text-white text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none" placeholder="0">
                             </div>
                         </div>
-                        <div class="grid grid-cols-4 gap-3">
-                        <div class="grid grid-cols-4 gap-3">
-                            <button type="button" onclick="handleShareClick('facebook')" class="flex items-center justify-center gap-2 px-3 py-2 rounded-2xl bg-blue-600 hover:bg-blue-700 transition text-white text-[11px] font-semibold">
+                        <div class="space-y-3">
+                            <p class="text-xs text-slate-400 uppercase tracking-wider">Share to unlock:</p>
+                            <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                                <button type="button" onclick="handleShareClick('facebook')" class="flex items-center justify-center gap-2 px-3 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 transition text-white text-[11px] font-semibold min-h-[46px]">
                                 <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M22 12C22 6.48 17.52 2 12 2S2 6.48 2 12c0 4.84 3.44 8.85 7.94 9.8v-6.93H7.08v-2.87h2.86V9.61c0-2.83 1.68-4.4 4.26-4.4 1.24 0 2.54.22 2.54.22v2.8h-1.44c-1.42 0-1.86.88-1.86 1.78v2.14h3.17l-.51 2.87h-2.66v6.93C18.56 20.85 22 16.84 22 12z"/></svg>
                                 Facebook
                             </button>
@@ -199,7 +200,7 @@ header("Expires: 0");
                         <input type="checkbox" id="pred-share" required class="mt-1 w-4 h-4 rounded border-slate-700 text-indigo-500 bg-slate-900">
                         <label for="pred-share" class="text-xs text-slate-400 leading-relaxed">I confirm that I have shared this app in 3 Facebook groups/timelines.</label>
                     </div>
-                    <button type="submit" id="pred-submit-btn" disabled class="w-full bg-indigo-500 opacity-50 cursor-not-allowed hover:bg-indigo-600 text-white font-bold py-3.5 rounded-xl transition-colors shadow-lg shadow-indigo-500/25 flex justify-center items-center">
+                    <button type="submit" id="pred-submit-btn" disabled class="w-full bg-indigo-500 disabled:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-indigo-600 text-white font-bold py-3.5 rounded-xl transition-colors shadow-lg shadow-indigo-500/25 flex justify-center items-center">
                         Submit Prediction
                     </button>
                 </form>
@@ -402,6 +403,8 @@ header("Expires: 0");
             document.getElementById('modal-match-title').innerText = tA + ' vs ' + tB;
             document.getElementById('label-team-a').innerText = tA;
             document.getElementById('label-team-b').innerText = tB;
+            document.getElementById('label-score-a').innerText = tA + ' Goals';
+            document.getElementById('label-score-b').innerText = tB + ' Goals';
             const imgEl = document.getElementById('modal-prize-img');
             if(img) { imgEl.src = img; imgEl.classList.remove('hidden'); } else { imgEl.classList.add('hidden'); }
 
