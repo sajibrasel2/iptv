@@ -79,14 +79,25 @@ if ($is_logged_in) {
         }
         if (isset($_POST['draw_winners'])) {
             $campaignId = (int)$_POST['campaign_id'];
+            $actualResult = $_POST['actual_result'] ?? '';
+            $actualGoalsA = isset($_POST['actual_goals_a']) ? (int)$_POST['actual_goals_a'] : null;
+            $actualGoalsB = isset($_POST['actual_goals_b']) ? (int)$_POST['actual_goals_b'] : null;
             $stmt = $conn->prepare("SELECT status FROM prediction_campaigns WHERE id=:id");
             $stmt->execute([':id' => $campaignId]);
             $status = $stmt->fetchColumn();
             if ($status !== 'closed') {
                 $drawError = "Campaign must be closed before drawing winners.";
+            } elseif ($actualResult === '' || !is_numeric($actualGoalsA) || !is_numeric($actualGoalsB)) {
+                $drawError = "Please provide the actual match result and exact score.";
             } else {
-                $stmt = $conn->prepare("SELECT id FROM prediction_entries WHERE campaign_id=:cid AND has_shared=1 AND is_winner=0");
-                $stmt->execute([':cid' => $campaignId]);
+                $matchOutcome = $actualResult;
+                $stmt = $conn->prepare("SELECT id FROM prediction_entries WHERE campaign_id=:cid AND has_shared=1 AND is_winner=0 AND predicted_team=:predicted_team AND predicted_score_a=:score_a AND predicted_score_b=:score_b");
+                $stmt->execute([
+                    ':cid' => $campaignId,
+                    ':predicted_team' => $matchOutcome,
+                    ':score_a' => $actualGoalsA,
+                    ':score_b' => $actualGoalsB,
+                ]);
                 $eligible = $stmt->fetchAll(PDO::FETCH_COLUMN);
                 if (count($eligible) < 3) {
                     $drawError = "Not enough eligible entries to draw 3 winners.";
@@ -217,8 +228,48 @@ if ($is_logged_in) {
             <h2 class="text-xl font-bold mb-4">Create New Campaign</h2>
             <form method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <input type="text" name="title" placeholder="Campaign Title" required class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white">
-                <input type="text" name="team_a" placeholder="Team A" required class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white">
-                <input type="text" name="team_b" placeholder="Team B" required class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white">
+                <select name="team_a" required class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white">
+                    <option value="" disabled selected>Team A</option>
+                    <option value="🇦🇷 Argentina">🇦🇷 Argentina</option>
+                    <option value="🇧🇷 Brazil">🇧🇷 Brazil</option>
+                    <option value="🇫🇷 France">🇫🇷 France</option>
+                    <option value="🇩🇪 Germany">🇩🇪 Germany</option>
+                    <option value="🇪🇸 Spain">🇪🇸 Spain</option>
+                    <option value="🇵🇹 Portugal">🇵🇹 Portugal</option>
+                    <option value="🏴 England">🏴 England</option>
+                    <option value="🇮🇹 Italy">🇮🇹 Italy</option>
+                    <option value="🇳🇱 Netherlands">🇳🇱 Netherlands</option>
+                    <option value="🇺🇸 USA">🇺🇸 USA</option>
+                    <option value="🇲🇽 Mexico">🇲🇽 Mexico</option>
+                    <option value="🇨🇦 Canada">🇨🇦 Canada</option>
+                    <option value="🇺🇾 Uruguay">🇺🇾 Uruguay</option>
+                    <option value="🇭🇷 Croatia">🇭🇷 Croatia</option>
+                    <option value="🇧🇪 Belgium">🇧🇪 Belgium</option>
+                    <option value="🇲🇦 Morocco">🇲🇦 Morocco</option>
+                    <option value="🇯🇵 Japan">🇯🇵 Japan</option>
+                    <option value="🇰🇷 South Korea">🇰🇷 South Korea</option>
+                </select>
+                <select name="team_b" required class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white">
+                    <option value="" disabled selected>Team B</option>
+                    <option value="🇦🇷 Argentina">🇦🇷 Argentina</option>
+                    <option value="🇧🇷 Brazil">🇧🇷 Brazil</option>
+                    <option value="🇫🇷 France">🇫🇷 France</option>
+                    <option value="🇩🇪 Germany">🇩🇪 Germany</option>
+                    <option value="🇪🇸 Spain">🇪🇸 Spain</option>
+                    <option value="🇵🇹 Portugal">🇵🇹 Portugal</option>
+                    <option value="🏴 England">🏴 England</option>
+                    <option value="🇮🇹 Italy">🇮🇹 Italy</option>
+                    <option value="🇳🇱 Netherlands">🇳🇱 Netherlands</option>
+                    <option value="🇺🇸 USA">🇺🇸 USA</option>
+                    <option value="🇲🇽 Mexico">🇲🇽 Mexico</option>
+                    <option value="🇨🇦 Canada">🇨🇦 Canada</option>
+                    <option value="🇺🇾 Uruguay">🇺🇾 Uruguay</option>
+                    <option value="🇭🇷 Croatia">🇭🇷 Croatia</option>
+                    <option value="🇧🇪 Belgium">🇧🇪 Belgium</option>
+                    <option value="🇲🇦 Morocco">🇲🇦 Morocco</option>
+                    <option value="🇯🇵 Japan">🇯🇵 Japan</option>
+                    <option value="🇰🇷 South Korea">🇰🇷 South Korea</option>
+                </select>
                 <input type="datetime-local" name="match_time" required class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white">
                 <input type="url" name="prize_image_url" placeholder="Prize Image URL" class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white">
                 <input type="url" name="fb_post_link" placeholder="Facebook Post Link" class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white">
@@ -279,6 +330,7 @@ if ($is_logged_in) {
                             <th class="px-3 py-2">Name</th>
                             <th class="px-3 py-2">Phone</th>
                             <th class="px-3 py-2">Prediction</th>
+                            <th class="px-3 py-2">Score</th>
                             <th class="px-3 py-2">Shared?</th>
                             <th class="px-3 py-2">Winner</th>
                         </tr>
@@ -288,12 +340,14 @@ if ($is_logged_in) {
                         $stmt = $conn->prepare("SELECT * FROM prediction_entries WHERE campaign_id=:cid ORDER BY id DESC");
                         $stmt->execute([':cid'=>$campaignId]);
                         while ($e = $stmt->fetch()):
+                            $predictionLabel = $e['predicted_team'] === 'team_a' ? $campaign['team_a'] : ($e['predicted_team'] === 'team_b' ? $campaign['team_b'] : 'Draw');
                         ?>
                         <tr class="border-b border-slate-600/30">
                             <td class="px-3 py-2 text-center"><?php echo $e['id']; ?></td>
                             <td class="px-3 py-2"><?php echo htmlspecialchars($e['user_name']); ?></td>
                             <td class="px-3 py-2"><?php echo htmlspecialchars($e['user_phone']); ?></td>
-                            <td class="px-3 py-2"><?php echo $e['predicted_team']; ?></td>
+                            <td class="px-3 py-2"><?php echo htmlspecialchars($predictionLabel); ?></td>
+                            <td class="px-3 py-2 text-center"><?php echo htmlspecialchars($e['predicted_score_a'] . ' - ' . $e['predicted_score_b']); ?></td>
                             <td class="px-3 py-2 text-center"><?php echo $e['has_shared'] ? 'Yes' : 'No'; ?></td>
                             <td class="px-3 py-2 text-center"><?php echo $e['is_winner'] ? '🏆' : '-'; ?></td>
                         </tr>
@@ -301,9 +355,27 @@ if ($is_logged_in) {
                     </tbody>
                 </table>
                 <?php if ($campaign['status'] === 'closed'): ?>
-                    <form method="POST" class="mt-4">
+                    <form method="POST" class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
                         <input type="hidden" name="campaign_id" value="<?php echo $campaignId; ?>">
-                        <button type="submit" name="draw_winners" class="bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2 px-4 rounded">Draw 3 Winners</button>
+                        <div>
+                            <label class="block text-xs text-slate-400 uppercase tracking-wider mb-2">Actual Result</label>
+                            <select name="actual_result" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white">
+                                <option value="team_a"><?php echo htmlspecialchars($campaign['team_a']); ?> Win</option>
+                                <option value="draw">Draw</option>
+                                <option value="team_b"><?php echo htmlspecialchars($campaign['team_b']); ?> Win</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 uppercase tracking-wider mb-2">Team A Goals</label>
+                            <input type="number" min="0" name="actual_goals_a" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white" placeholder="0">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 uppercase tracking-wider mb-2">Team B Goals</label>
+                            <input type="number" min="0" name="actual_goals_b" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white" placeholder="0">
+                        </div>
+                        <div class="col-span-1 md:col-span-3">
+                            <button type="submit" name="draw_winners" class="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-3 rounded-xl">Draw 3 Winners</button>
+                        </div>
                     </form>
                     <?php if (isset($drawError)) echo "<p class='mt-2 text-red-400'>".$drawError."</p>"; ?>
                     <?php if (isset($drawSuccess)) echo "<p class='mt-2 text-green-400'>".$drawSuccess."</p>"; ?>

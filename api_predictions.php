@@ -12,6 +12,25 @@ function normalizeBanglaDigits($value) {
     ]);
 }
 
+function ensurePredictionSchema(PDO $pdo) {
+    try {
+        $hasScoreA = $pdo->query("SHOW COLUMNS FROM prediction_entries LIKE 'predicted_score_a'")->fetch();
+        if (!$hasScoreA) {
+            $pdo->exec("ALTER TABLE prediction_entries ADD COLUMN predicted_score_a INT NULL");
+        }
+        $hasScoreB = $pdo->query("SHOW COLUMNS FROM prediction_entries LIKE 'predicted_score_b'")->fetch();
+        if (!$hasScoreB) {
+            $pdo->exec("ALTER TABLE prediction_entries ADD COLUMN predicted_score_b INT NULL");
+        }
+        $predTeam = $pdo->query("SHOW COLUMNS FROM prediction_entries LIKE 'predicted_team'")->fetch();
+        if ($predTeam && stripos($predTeam['Type'], 'enum(') === 0) {
+            $pdo->exec("ALTER TABLE prediction_entries MODIFY predicted_team VARCHAR(20) NULL");
+        }
+    } catch (PDOException $e) {
+        // Ignore schema update failures in environments without permissions.
+    }
+}
+
 // Create PDO connection
 $dsn = "mysql:host=$servername;dbname=$dbname;charset=$charset";
 $options = [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::ATTR_EMULATE_PREPARES => false];
@@ -22,6 +41,8 @@ try {
     echo json_encode(['error' => 'Database connection failed']);
     exit;
 }
+
+ensurePredictionSchema($pdo);
 
 if ($method === 'GET') {
     // Return the currently active campaign
@@ -34,7 +55,7 @@ if ($method === 'GET') {
 
 if ($method === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
-    $required = ['campaign_id','user_name','user_phone','predicted_team','has_shared'];
+    $required = ['campaign_id','user_name','user_phone','predicted_team','predicted_score_a','predicted_score_b','has_shared'];
     foreach ($required as $field) {
         if (!isset($data[$field])) {
             http_response_code(400);
@@ -43,6 +64,8 @@ if ($method === 'POST') {
         }
     }
     $data['user_phone'] = normalizeBanglaDigits($data['user_phone']);
+    $data['predicted_score_a'] = is_numeric($data['predicted_score_a']) ? (int)$data['predicted_score_a'] : null;
+    $data['predicted_score_b'] = is_numeric($data['predicted_score_b']) ? (int)$data['predicted_score_b'] : null;
     // Prevent duplicate submissions for the same campaign and phone number
     $duplicateStmt = $pdo->prepare("SELECT COUNT(*) AS count FROM prediction_entries WHERE campaign_id = :campaign_id AND user_phone = :user_phone");
     $duplicateStmt->execute([
@@ -60,12 +83,14 @@ if ($method === 'POST') {
     }
 
     // Basic validation (you can extend this)
-    $stmt = $pdo->prepare("INSERT INTO prediction_entries (campaign_id, user_name, user_phone, predicted_team, has_shared) VALUES (:campaign_id, :user_name, :user_phone, :predicted_team, :has_shared)");
+    $stmt = $pdo->prepare("INSERT INTO prediction_entries (campaign_id, user_name, user_phone, predicted_team, predicted_score_a, predicted_score_b, has_shared) VALUES (:campaign_id, :user_name, :user_phone, :predicted_team, :predicted_score_a, :predicted_score_b, :has_shared)");
     $stmt->execute([
         ':campaign_id'   => $data['campaign_id'],
         ':user_name'     => $data['user_name'],
         ':user_phone'    => $data['user_phone'],
         ':predicted_team'=> $data['predicted_team'],
+        ':predicted_score_a' => $data['predicted_score_a'],
+        ':predicted_score_b' => $data['predicted_score_b'],
         ':has_shared'    => $data['has_shared'] ? 1 : 0,
     ]);
     echo json_encode(['success' => true, 'message' => 'Prediction recorded']);

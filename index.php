@@ -147,11 +147,15 @@ header("Expires: 0");
                     <input type="text" id="pred-name" required placeholder="Your Full Name" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:border-indigo-500 outline-none">
                     <input type="tel" id="pred-phone" required placeholder="Your Phone Number" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:border-indigo-500 outline-none">
                     <div class="space-y-2">
-                        <p class="text-xs text-slate-400 uppercase tracking-wider">Who will win?</p>
-                        <div class="grid grid-cols-2 gap-3">
+                        <p class="text-xs text-slate-400 uppercase tracking-wider">Prediction</p>
+                        <div class="grid grid-cols-3 gap-3">
                             <label class="flex items-center justify-center p-3 border border-slate-700 rounded-xl cursor-pointer hover:bg-slate-700/50 has-[:checked]:bg-indigo-500/20 has-[:checked]:border-indigo-500">
                                 <input type="radio" name="predicted_team" value="team_a" required class="hidden">
                                 <span id="label-team-a" class="text-sm font-semibold text-white"></span>
+                            </label>
+                            <label class="flex items-center justify-center p-3 border border-slate-700 rounded-xl cursor-pointer hover:bg-slate-700/50 has-[:checked]:bg-indigo-500/20 has-[:checked]:border-indigo-500">
+                                <input type="radio" name="predicted_team" value="draw" required class="hidden">
+                                <span class="text-sm font-semibold text-white">Draw</span>
                             </label>
                             <label class="flex items-center justify-center p-3 border border-slate-700 rounded-xl cursor-pointer hover:bg-slate-700/50 has-[:checked]:bg-indigo-500/20 has-[:checked]:border-indigo-500">
                                 <input type="radio" name="predicted_team" value="team_b" required class="hidden">
@@ -160,6 +164,17 @@ header("Expires: 0");
                         </div>
                     </div>
                     <div class="space-y-3">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs text-slate-400 uppercase tracking-wider mb-2">Team A Goals</label>
+                                <input type="number" id="pred-score-a" min="0" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:border-indigo-500 outline-none" placeholder="0">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-slate-400 uppercase tracking-wider mb-2">Team B Goals</label>
+                                <input type="number" id="pred-score-b" min="0" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:border-indigo-500 outline-none" placeholder="0">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-4 gap-3">
                         <div class="grid grid-cols-4 gap-3">
                             <button type="button" onclick="handleShareClick('facebook')" class="flex items-center justify-center gap-2 px-3 py-2 rounded-2xl bg-blue-600 hover:bg-blue-700 transition text-white text-[11px] font-semibold">
                                 <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M22 12C22 6.48 17.52 2 12 2S2 6.48 2 12c0 4.84 3.44 8.85 7.94 9.8v-6.93H7.08v-2.87h2.86V9.61c0-2.83 1.68-4.4 4.26-4.4 1.24 0 2.54.22 2.54.22v2.8h-1.44c-1.42 0-1.86.88-1.86 1.78v2.14h3.17l-.51 2.87h-2.66v6.93C18.56 20.85 22 16.84 22 12z"/></svg>
@@ -205,6 +220,8 @@ header("Expires: 0");
             name: 'prediction_name',
             phone: 'prediction_phone',
             team: 'prediction_team',
+            scoreA: 'prediction_score_a',
+            scoreB: 'prediction_score_b',
             shares: 'prediction_shareClicks'
         };
 
@@ -221,9 +238,13 @@ header("Expires: 0");
             if (phoneField) phoneField.value = phone;
             const selectedTeam = document.querySelector('input[name="predicted_team"]:checked');
             const team = selectedTeam ? selectedTeam.value : '';
+            const scoreA = document.getElementById('pred-score-a')?.value || '';
+            const scoreB = document.getElementById('pred-score-b')?.value || '';
             localStorage.setItem(predictionStateKeys.name, name);
             localStorage.setItem(predictionStateKeys.phone, phone);
             localStorage.setItem(predictionStateKeys.team, team);
+            localStorage.setItem(predictionStateKeys.scoreA, scoreA);
+            localStorage.setItem(predictionStateKeys.scoreB, scoreB);
             localStorage.setItem(predictionStateKeys.shares, String(shareClicks));
         }
 
@@ -240,6 +261,8 @@ header("Expires: 0");
                 });
             }
             document.querySelectorAll('input[name="predicted_team"]').forEach(el => el.addEventListener('change', savePredictionState));
+            document.getElementById('pred-score-a')?.addEventListener('input', savePredictionState);
+            document.getElementById('pred-score-b')?.addEventListener('input', savePredictionState);
         }
 
         // Tab Logic
@@ -393,6 +416,12 @@ header("Expires: 0");
                 const savedRadio = document.querySelector(`input[name="predicted_team"][value="${savedTeam}"]`);
                 if (savedRadio) savedRadio.checked = true;
             }
+            if (localStorage.getItem(predictionStateKeys.scoreA) !== null) {
+                document.getElementById('pred-score-a').value = localStorage.getItem(predictionStateKeys.scoreA);
+            }
+            if (localStorage.getItem(predictionStateKeys.scoreB) !== null) {
+                document.getElementById('pred-score-b').value = localStorage.getItem(predictionStateKeys.scoreB);
+            }
 
             shareClicks = Math.min(savedShares, 3);
             const shareCountEl = document.getElementById('share-count');
@@ -434,6 +463,8 @@ header("Expires: 0");
             localStorage.removeItem(predictionStateKeys.name);
             localStorage.removeItem(predictionStateKeys.phone);
             localStorage.removeItem(predictionStateKeys.team);
+            localStorage.removeItem(predictionStateKeys.scoreA);
+            localStorage.removeItem(predictionStateKeys.scoreB);
             localStorage.removeItem(predictionStateKeys.shares);
         };
 
@@ -450,6 +481,8 @@ header("Expires: 0");
                         user_name: document.getElementById('pred-name').value,
                         user_phone: document.getElementById('pred-phone').value,
                         predicted_team: document.querySelector('input[name="predicted_team"]:checked').value,
+                        predicted_score_a: document.getElementById('pred-score-a').value,
+                        predicted_score_b: document.getElementById('pred-score-b').value,
                         has_shared: document.getElementById('pred-share').checked
                     })
                 });
@@ -457,6 +490,8 @@ header("Expires: 0");
                     localStorage.removeItem(predictionStateKeys.name);
                     localStorage.removeItem(predictionStateKeys.phone);
                     localStorage.removeItem(predictionStateKeys.team);
+                    localStorage.removeItem(predictionStateKeys.scoreA);
+                    localStorage.removeItem(predictionStateKeys.scoreB);
                     localStorage.removeItem(predictionStateKeys.shares);
                     document.getElementById('prediction-form').classList.add('hidden');
                     document.getElementById('pred-success').classList.remove('hidden');
