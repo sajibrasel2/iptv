@@ -238,40 +238,42 @@ header("Expires: 0");
             const container = document.getElementById('cards-container');
             const loading = document.getElementById('loading');
             
+            let sites = [];
+            
             try {
-                // Fetch dynamic data from API with cache-busting parameter
+                // Fetch dynamic data
                 const response = await fetch('api_dynamic.php?t=' + Date.now());
                 const data = await response.json();
-                
-                const sites = data.channels || [];
+                sites = data.channels || [];
                 const ads = data.ads || [];
-                
-                // Store active ads globally for the click handler
                 window.activeAds = ads.map(a => a.ad_url);
-        // Fetch active prediction campaign and display banner
-        let activeCampaign = null;
-        try {
-            const predResp = await fetch('api_predictions.php');
-            const predData = await predResp.json();
-            if (predData && predData.active_campaign) {
-                activeCampaign = predData.active_campaign;
-                const homeSection = document.getElementById('home-section');
-                const bannerDiv = document.createElement('div');
-                bannerDiv.id = 'prediction-banner';
-                bannerDiv.className = 'flex items-center justify-between bg-gradient-to-r from-indigo-600 to-purple-600 p-4 rounded-xl mb-4 text-white shadow-lg cursor-pointer';
-                bannerDiv.innerHTML = `
-                    <div>
-                        <h2 class="text-lg font-bold">🎁 Predict & Win Jersey!</h2>
-                        <p class="text-sm">Predict the match outcome and stand a chance to win the jersey.</p>
-                    </div>
-                    <button id="open-prediction-modal" class="bg-white text-indigo-600 font-semibold py-2 px-4 rounded-full hover:bg-gray-100 transition">Predict Now</button>
-                `;
-                homeSection.prepend(bannerDiv);
-                document.getElementById('open-prediction-modal').addEventListener('click', () => openPredictionModal(activeCampaign));
+                
+                // Fetch predictions
+                try {
+                    const predResp = await fetch('api_predictions.php');
+                    const predData = await predResp.json();
+                    console.log('Prediction Data:', predData);
+                    if (predData && predData.active_campaign) {
+                        const homeSection = document.getElementById('home-section');
+                        const bannerDiv = document.createElement('div');
+                        bannerDiv.id = 'prediction-banner';
+                        bannerDiv.className = 'flex items-center justify-between bg-gradient-to-r from-indigo-600 to-purple-600 p-4 rounded-xl mb-4 text-white shadow-lg cursor-pointer';
+                        bannerDiv.innerHTML = `
+                            <div>
+                                <h2 class="text-lg font-bold">🎁 Predict & Win Jersey!</h2>
+                                <p class="text-sm">Predict the match outcome and stand a chance to win the jersey.</p>
+                            </div>
+                            <button id="open-prediction-modal" class="bg-white text-indigo-600 font-semibold py-2 px-4 rounded-full hover:bg-gray-100 transition">Predict Now</button>
+                        `;
+                        homeSection.prepend(bannerDiv);
+                        document.getElementById('open-prediction-modal').addEventListener('click', () => openPredictionModal(predData.active_campaign));
+                    }
+                } catch (e) {
+                    console.error('Error fetching prediction campaign:', e);
+                }
+            } catch (error) {
+                console.error('Error loading initialization data:', error);
             }
-        } catch (e) {
-            console.error('Error fetching prediction campaign:', e);
-        }
 
                 // Remove loading spinner
                 loading.remove();
