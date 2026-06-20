@@ -48,14 +48,14 @@ header("Expires: 0");
         #bottom-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 448px; z-index: 9999; background-color: #1a1e29; }
         body { height: 100dvh; overflow: hidden; }
         .watermark-logo {
-            position: fixed;
-            top: 1rem;
-            right: 1rem;
+            position: absolute !important;
+            top: 20px !important;
+            right: 20px !important;
             width: 72px;
             max-width: 80px;
             opacity: 0.72;
-            z-index: 9999;
-            pointer-events: none;
+            z-index: 2147483647 !important;
+            pointer-events: none !important;
             animation: watermarkPulse 4.5s ease-in-out infinite;
             filter: drop-shadow(0 0 18px rgba(56, 189, 248, 0.22));
         }
@@ -93,7 +93,9 @@ header("Expires: 0");
             </div>
         </header>
 
-        <img src="t&c.png" alt="Premium watermark" class="watermark-logo" aria-hidden="true">
+        <div id="watermark-wrapper" class="absolute inset-0 pointer-events-none">
+            <img src="t&c.png" alt="Premium watermark" class="watermark-logo" aria-hidden="true">
+        </div>
 
         <div class="app-download-banner" style="background: linear-gradient(to right, #1a2a6c, #b21f1f, #fdbb2d); padding: 25px; border-radius: 15px; text-align: center; color: white; margin: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.3);">
             <h2 style="margin-top: 0; margin-bottom: 10px; font-weight:bold;">📺 Download TCTV App</h2>
@@ -419,6 +421,76 @@ header("Expires: 0");
             window.location.href = targetUrl;
         }
 
+        function createWatermarkElement() {
+            let watermark = document.querySelector('.watermark-logo');
+            if (watermark) return watermark;
+
+            watermark = document.createElement('img');
+            watermark.src = 't&c.png';
+            watermark.alt = 'Premium watermark';
+            watermark.className = 'watermark-logo';
+            watermark.setAttribute('aria-hidden', 'true');
+            watermark.style.position = 'absolute';
+            watermark.style.top = '20px';
+            watermark.style.right = '20px';
+            watermark.style.zIndex = '2147483647';
+            watermark.style.pointerEvents = 'none';
+            return watermark;
+        }
+
+        function findPlayerContainer() {
+            const selectors = [
+                '.plyr',
+                '.video-js',
+                '.clappr-player',
+                '.html5-video-player',
+                '.jwplayer',
+                '.player-wrapper',
+                '.player',
+                '#player',
+                'div[id*="player"]',
+                'div[class*="player"]',
+                'video',
+                'iframe'
+            ];
+            const candidates = Array.from(document.querySelectorAll(selectors.join(','))).filter(el => {
+                if (!el || el.classList.contains('watermark-logo')) return false;
+                const rect = el.getBoundingClientRect();
+                return rect.width > 0 && rect.height > 0;
+            });
+            return candidates[0] || null;
+        }
+
+        function attachWatermarkToPlayer() {
+            const watermark = createWatermarkElement();
+            const playerContainer = findPlayerContainer();
+            const fullScreenElement = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+            let target = playerContainer || fullScreenElement || document.body;
+
+            if (target && (target.tagName === 'VIDEO' || target.tagName === 'IFRAME')) {
+                target = target.parentElement || document.body;
+            }
+
+            if (target && !['relative', 'absolute', 'fixed', 'sticky'].includes(getComputedStyle(target).position)) {
+                target.style.position = 'relative';
+            }
+
+            if (!target.contains(watermark)) {
+                target.appendChild(watermark);
+            }
+
+            return target;
+        }
+
+        function handleFullscreenChange() {
+            attachWatermarkToPlayer();
+        }
+
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+        document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+        document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
         window.handleShareClick = (platform) => {
             const shareText = `🎯 Predict the match, share this with 3 friends, and stand a chance to WIN an exclusive Jersey! 🎽
 
@@ -468,6 +540,7 @@ https://techandclick.site/iptv/download.html`;
             const container = document.getElementById('cards-container');
             const loading = document.getElementById('loading');
             bindPredictionStateListeners();
+            attachWatermarkToPlayer();
             
             // 1. Fetch Prediction Banner
             try {
