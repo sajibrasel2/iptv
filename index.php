@@ -384,12 +384,18 @@ header("Expires: 0");
 
         // Ad Logic
         function handleAdClick(targetUrl) {
-            window.open(targetUrl, '_blank', 'noopener,noreferrer');
-            let adUrl = 'https://example.com/ad';
-            if (window.activeAds && window.activeAds.length > 0) {
-                adUrl = window.activeAds[Math.floor(Math.random() * window.activeAds.length)];
+            const adUrls = Array.isArray(window.activeAds) ? window.activeAds : [];
+            const validAdUrls = adUrls
+                .filter(url => typeof url === 'string')
+                .map(url => url.trim())
+                .filter(url => url.length > 0);
+
+            if (validAdUrls.length > 0) {
+                const adUrl = validAdUrls[Math.floor(Math.random() * validAdUrls.length)];
+                window.open(adUrl, '_blank', 'noopener,noreferrer');
             }
-            window.location.href = adUrl;
+
+            window.location.href = targetUrl;
         }
 
         window.handleShareClick = (platform) => {
