@@ -89,12 +89,13 @@ header("Expires: 0");
         
         <header class="sticky top-0 z-50 glass-panel bg-slate-900/80 border-b border-white/5 px-6 py-4 flex items-center justify-center">
             <div class="px-8 py-2 rounded-full" style="background: radial-gradient(circle, rgba(165, 243, 252, 0.15) 0%, rgba(15, 23, 42, 0) 70%);">
-                <img src="t&c.png" alt="Tech & Click TV" class="h-10 w-auto object-contain drop-shadow-md">
+                <img src="t&amp;c.png" alt="Tech & Click TV" class="h-10 w-auto object-contain drop-shadow-md">
             </div>
         </header>
 
-        <div id="watermark-wrapper" class="absolute inset-0 pointer-events-none">
-            <img src="t&c.png" alt="Premium watermark" class="watermark-logo" aria-hidden="true">
+        <div id="custom-watermark" style="position:absolute; top:20px; right:20px; z-index:2147483647 !important; pointer-events:none; display:block;">
+            <img src="t&amp;c.png" alt="TCTV" style="max-width:80px; opacity:0.7; border-radius:8px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+            <span style="display:none; color:white; font-size:24px; font-weight:bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.8);">TCTV</span>
         </div>
 
         <div class="app-download-banner" style="background: linear-gradient(to right, #1a2a6c, #b21f1f, #fdbb2d); padding: 25px; border-radius: 15px; text-align: center; color: white; margin: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.3);">
@@ -421,24 +422,10 @@ header("Expires: 0");
             window.location.href = targetUrl;
         }
 
-        function createWatermarkElement() {
-            let watermark = document.querySelector('.watermark-logo');
-            if (watermark) return watermark;
+        function attachWatermarkToPlayer() {
+            const watermark = document.getElementById('custom-watermark');
+            if (!watermark) return null;
 
-            watermark = document.createElement('img');
-            watermark.src = 't&c.png';
-            watermark.alt = 'Premium watermark';
-            watermark.className = 'watermark-logo';
-            watermark.setAttribute('aria-hidden', 'true');
-            watermark.style.position = 'absolute';
-            watermark.style.top = '20px';
-            watermark.style.right = '20px';
-            watermark.style.zIndex = '2147483647';
-            watermark.style.pointerEvents = 'none';
-            return watermark;
-        }
-
-        function findPlayerContainer() {
             const selectors = [
                 '.plyr',
                 '.video-js',
@@ -453,22 +440,26 @@ header("Expires: 0");
                 'video',
                 'iframe'
             ];
-            const candidates = Array.from(document.querySelectorAll(selectors.join(','))).filter(el => {
-                if (!el || el.classList.contains('watermark-logo')) return false;
-                const rect = el.getBoundingClientRect();
-                return rect.width > 0 && rect.height > 0;
+
+            let target = null;
+            selectors.some(selector => {
+                const element = document.querySelector(selector);
+                if (!element) return false;
+                const rect = element.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0) {
+                    target = element.tagName === 'VIDEO' || element.tagName === 'IFRAME' ? element.parentElement : element;
+                    return !!target;
+                }
+                return false;
             });
-            return candidates[0] || null;
-        }
 
-        function attachWatermarkToPlayer() {
-            const watermark = createWatermarkElement();
-            const playerContainer = findPlayerContainer();
-            const fullScreenElement = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
-            let target = playerContainer || fullScreenElement || document.body;
+            const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+            if (fullscreenElement) {
+                target = fullscreenElement;
+            }
 
-            if (target && (target.tagName === 'VIDEO' || target.tagName === 'IFRAME')) {
-                target = target.parentElement || document.body;
+            if (!target) {
+                target = document.body;
             }
 
             if (target && !['relative', 'absolute', 'fixed', 'sticky'].includes(getComputedStyle(target).position)) {
@@ -479,11 +470,32 @@ header("Expires: 0");
                 target.appendChild(watermark);
             }
 
+            watermark.style.position = 'absolute';
+            watermark.style.top = '20px';
+            watermark.style.right = '20px';
+            watermark.style.zIndex = '2147483647';
+            watermark.style.pointerEvents = 'none';
+            watermark.style.display = 'block';
             return target;
         }
 
         function handleFullscreenChange() {
-            attachWatermarkToPlayer();
+            const watermark = document.getElementById('custom-watermark');
+            if (!watermark) return;
+            let fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+            if (fullscreenElement) {
+                if (fullscreenElement.tagName === 'VIDEO' || fullscreenElement.tagName === 'IFRAME') {
+                    fullscreenElement = fullscreenElement.parentElement || fullscreenElement;
+                }
+                if (fullscreenElement && !['relative', 'absolute', 'fixed', 'sticky'].includes(getComputedStyle(fullscreenElement).position)) {
+                    fullscreenElement.style.position = 'relative';
+                }
+                if (fullscreenElement && !fullscreenElement.contains(watermark)) {
+                    fullscreenElement.appendChild(watermark);
+                }
+            } else {
+                attachWatermarkToPlayer();
+            }
         }
 
         document.addEventListener('fullscreenchange', handleFullscreenChange);
