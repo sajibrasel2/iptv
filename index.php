@@ -47,25 +47,6 @@ header("Expires: 0");
         .pb-safe { padding-bottom: env(safe-area-inset-bottom, 16px); }
         #bottom-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 448px; z-index: 9999; background-color: #1a1e29; }
         body { height: 100dvh; overflow: hidden; }
-        .watermark-logo {
-            position: absolute !important;
-            top: 20px !important;
-            right: 20px !important;
-            width: 72px;
-            max-width: 80px;
-            opacity: 0.72;
-            z-index: 2147483647 !important;
-            pointer-events: none !important;
-            animation: watermarkPulse 4.5s ease-in-out infinite;
-            filter: drop-shadow(0 0 18px rgba(56, 189, 248, 0.22));
-        }
-        @keyframes watermarkPulse {
-            0%, 100% { transform: scale(1); box-shadow: 0 0 0 rgba(255,255,255,0); }
-            50% { transform: scale(1.05); box-shadow: 0 0 18px rgba(56, 189, 248, 0.22); }
-        }
-        @media (max-width: 640px) {
-            .watermark-logo { top: 0.75rem; right: 0.75rem; width: 60px; }
-        }
         @keyframes shimmer { 100% { transform: translateX(100%); } }
     </style>
 </head>
@@ -92,11 +73,6 @@ header("Expires: 0");
                 <img src="t&amp;c.png" alt="Tech & Click TV" class="h-10 w-auto object-contain drop-shadow-md">
             </div>
         </header>
-
-        <div id="custom-watermark" style="position:absolute; top:20px; right:20px; z-index:2147483647 !important; pointer-events:none; display:block;">
-            <img src="t&amp;c.png" alt="TCTV" style="max-width:80px; opacity:0.7; border-radius:8px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-            <span style="display:none; color:white; font-size:24px; font-weight:bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.8);">TCTV</span>
-        </div>
 
         <div class="app-download-banner" style="background: linear-gradient(to right, #1a2a6c, #b21f1f, #fdbb2d); padding: 25px; border-radius: 15px; text-align: center; color: white; margin: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.3);">
             <h2 style="margin-top: 0; margin-bottom: 10px; font-weight:bold;">📺 Download TCTV App</h2>
@@ -422,86 +398,6 @@ header("Expires: 0");
             window.location.href = targetUrl;
         }
 
-        function attachWatermarkToPlayer() {
-            const watermark = document.getElementById('custom-watermark');
-            if (!watermark) return null;
-
-            const selectors = [
-                '.plyr',
-                '.video-js',
-                '.clappr-player',
-                '.html5-video-player',
-                '.jwplayer',
-                '.player-wrapper',
-                '.player',
-                '#player',
-                'div[id*="player"]',
-                'div[class*="player"]',
-                'video',
-                'iframe'
-            ];
-
-            let target = null;
-            selectors.some(selector => {
-                const element = document.querySelector(selector);
-                if (!element) return false;
-                const rect = element.getBoundingClientRect();
-                if (rect.width > 0 && rect.height > 0) {
-                    target = element.tagName === 'VIDEO' || element.tagName === 'IFRAME' ? element.parentElement : element;
-                    return !!target;
-                }
-                return false;
-            });
-
-            const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
-            if (fullscreenElement) {
-                target = fullscreenElement;
-            }
-
-            if (!target) {
-                target = document.body;
-            }
-
-            if (target && !['relative', 'absolute', 'fixed', 'sticky'].includes(getComputedStyle(target).position)) {
-                target.style.position = 'relative';
-            }
-
-            if (!target.contains(watermark)) {
-                target.appendChild(watermark);
-            }
-
-            watermark.style.position = 'absolute';
-            watermark.style.top = '20px';
-            watermark.style.right = '20px';
-            watermark.style.zIndex = '2147483647';
-            watermark.style.pointerEvents = 'none';
-            watermark.style.display = 'block';
-            return target;
-        }
-
-        function handleFullscreenChange() {
-            const watermark = document.getElementById('custom-watermark');
-            if (!watermark) return;
-            let fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
-            if (fullscreenElement) {
-                if (fullscreenElement.tagName === 'VIDEO' || fullscreenElement.tagName === 'IFRAME') {
-                    fullscreenElement = fullscreenElement.parentElement || fullscreenElement;
-                }
-                if (fullscreenElement && !['relative', 'absolute', 'fixed', 'sticky'].includes(getComputedStyle(fullscreenElement).position)) {
-                    fullscreenElement.style.position = 'relative';
-                }
-                if (fullscreenElement && !fullscreenElement.contains(watermark)) {
-                    fullscreenElement.appendChild(watermark);
-                }
-            } else {
-                attachWatermarkToPlayer();
-            }
-        }
-
-        document.addEventListener('fullscreenchange', handleFullscreenChange);
-        document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-        document.addEventListener('mozfullscreenchange', handleFullscreenChange);
-        document.addEventListener('MSFullscreenChange', handleFullscreenChange);
 
         window.handleShareClick = (platform) => {
             const shareText = `🎯 Predict the match, share this with 3 friends, and stand a chance to WIN an exclusive Jersey! 🎽
@@ -552,7 +448,6 @@ https://techandclick.site/iptv/download.html`;
             const container = document.getElementById('cards-container');
             const loading = document.getElementById('loading');
             bindPredictionStateListeners();
-            attachWatermarkToPlayer();
             
             // 1. Fetch Prediction Banner
             try {
