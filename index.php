@@ -47,6 +47,25 @@ header("Expires: 0");
         .pb-safe { padding-bottom: env(safe-area-inset-bottom, 16px); }
         #bottom-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 448px; z-index: 9999; background-color: #1a1e29; }
         body { height: 100dvh; overflow: hidden; }
+        .watermark-logo {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            width: 72px;
+            max-width: 80px;
+            opacity: 0.72;
+            z-index: 9999;
+            pointer-events: none;
+            animation: watermarkPulse 4.5s ease-in-out infinite;
+            filter: drop-shadow(0 0 18px rgba(56, 189, 248, 0.22));
+        }
+        @keyframes watermarkPulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0 rgba(255,255,255,0); }
+            50% { transform: scale(1.05); box-shadow: 0 0 18px rgba(56, 189, 248, 0.22); }
+        }
+        @media (max-width: 640px) {
+            .watermark-logo { top: 0.75rem; right: 0.75rem; width: 60px; }
+        }
         @keyframes shimmer { 100% { transform: translateX(100%); } }
     </style>
 </head>
@@ -73,6 +92,8 @@ header("Expires: 0");
                 <img src="t&c.png" alt="Tech & Click TV" class="h-10 w-auto object-contain drop-shadow-md">
             </div>
         </header>
+
+        <img src="t&c.png" alt="Premium watermark" class="watermark-logo" aria-hidden="true">
 
         <div class="app-download-banner" style="background: linear-gradient(to right, #1a2a6c, #b21f1f, #fdbb2d); padding: 25px; border-radius: 15px; text-align: center; color: white; margin: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.3);">
             <h2 style="margin-top: 0; margin-bottom: 10px; font-weight:bold;">📺 Download TCTV App</h2>
