@@ -110,8 +110,6 @@ header("Expires: 0");
             </div>
         </main>
 
-        <div class="flex justify-center my-2"><script src="ads.js"></script></div>
-
         <nav id="bottom-nav" class="border-t border-white/5 pb-safe">
             <div class="flex justify-around items-center px-2 py-2">
                 <button id="nav-home" class="flex flex-col items-center p-2 text-indigo-400 transition-colors group">
