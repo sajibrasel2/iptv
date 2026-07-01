@@ -25,7 +25,7 @@ try {
     $autoplayUrl = 'https://fifalive.click/';
 }
 $conn = null;
-$initialPlayerSrc = 'proxy.php?url=' . rawurlencode($autoplayUrl);
+$initialPlayerSrc = $autoplayUrl;
 ?>
 <!DOCTYPE html>
 <html lang="en" class="dark">
@@ -123,7 +123,11 @@ $initialPlayerSrc = 'proxy.php?url=' . rawurlencode($autoplayUrl);
         <main class="flex-1 overflow-y-auto p-4 pb-8 relative" style="-webkit-overflow-scrolling: touch;">
             <section class="rounded-[32px] border border-slate-800 bg-slate-950/95 shadow-[0_30px_80px_rgba(0,0,0,0.45)] overflow-hidden">
                 <div class="relative aspect-[16/9] bg-black">
-                    <iframe id="main-player" src="<?= htmlspecialchars($initialPlayerSrc, ENT_QUOTES); ?>" sandbox="allow-scripts allow-same-origin allow-presentation" allowfullscreen class="w-full h-full border-0 bg-black rounded-[28px] shadow-[0_35px_120px_rgba(0,0,0,0.55)]"></iframe>
+                    <div class="relative w-full h-full overflow-hidden rounded-[28px] shadow-[0_35px_120px_rgba(0,0,0,0.55)]">
+                        <div class="absolute inset-x-0 top-0 h-16 z-[1000] pointer-events-none bg-black/95"></div>
+                        <div class="absolute bottom-0 right-0 w-[240px] h-[140px] z-[1000] pointer-events-none bg-black/95"></div>
+                        <iframe id="main-player" src="<?= htmlspecialchars($initialPlayerSrc, ENT_QUOTES); ?>" sandbox="allow-scripts allow-popups allow-forms allow-presentation" allowfullscreen class="relative z-[2] w-full h-full border-0 bg-black"></iframe>
+                    </div>
                 </div>
                 <div class="pt-4 pb-4 px-4">
                     <div class="overflow-x-auto">
@@ -190,49 +194,10 @@ $initialPlayerSrc = 'proxy.php?url=' . rawurlencode($autoplayUrl);
         window.switchServer = (streamUrl, button) => {
             const iframe = document.getElementById('main-player');
             if (!iframe || !streamUrl) return;
-            iframe.src = 'proxy.php?url=' + encodeURIComponent(streamUrl);
+            iframe.src = streamUrl;
             document.querySelectorAll('#server-list .server-pill').forEach(el => el.classList.remove('active'));
             if (button) button.classList.add('active');
         };
-
-        function injectIframeStyles() {
-            const iframe = document.getElementById('main-player');
-            if (!iframe || !iframe.contentWindow) return;
-            try {
-                const doc = iframe.contentDocument || iframe.contentWindow.document;
-                if (!doc || !doc.head) return;
-                const existing = doc.getElementById('proxy-overlay-fix-style');
-                if (existing) existing.remove();
-
-                const style = document.createElement('style');
-                style.id = 'proxy-overlay-fix-style';
-                style.innerHTML = `
-                    * { pointer-events: auto !important; }
-                    #socialWidget, .social-box, .social-btn, .close-social,
-                    #sticky-header-notice, .sticky-notice, .marquee-wrapper, .marquee-text,
-                    #fbLockerBtn, #lockerCountdown, #countNumber,
-                    .modal, .popup, .overlay, [class*="overlay"], [id*="overlay"],
-                    .announcement-bar, .top-bar, .follow-container, .social-buttons,
-                    .marquee, .marquee-container {
-                        display: none !important;
-                        visibility: hidden !important;
-                        opacity: 0 !important;
-                        height: 0 !important;
-                        min-height: 0 !important;
-                        overflow: hidden !important;
-                        pointer-events: none !important;
-                    }
-                `;
-                doc.head.appendChild(style);
-            } catch (error) {
-                console.warn('Unable to inject iframe styles:', error);
-            }
-        }
-
-        const iframeEl = document.getElementById('main-player');
-        if (iframeEl) {
-            iframeEl.addEventListener('load', injectIframeStyles);
-        }
     </script>
 </body>
 </html>
