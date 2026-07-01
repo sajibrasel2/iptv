@@ -64,17 +64,17 @@ $conn = null;
     
     <style>
         ::-webkit-scrollbar { width: 0px; background: transparent; }
-        body { height: 100dvh; overflow: hidden; -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
+        html, body { min-height: 100vh; height: 100vh; }
+        body { overflow: hidden; -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
         .glass-panel { backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
         .pb-safe { padding-bottom: env(safe-area-inset-bottom, 16px); }
         #bottom-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 448px; z-index: 9999; background-color: #1a1e29; }
-        body { height: 100dvh; overflow: hidden; }
         .server-pill { white-space: nowrap; padding: 0.75rem 1.25rem; border: 1px solid rgba(148,163,184,.18); border-radius: 9999px; background: rgba(15,23,42,.8); color: #cbd5e1; font-size: 0.95rem; font-weight: 600; transition: all .25s ease; }
         .server-pill:hover { background: rgba(59,130,246,.12); border-color: rgba(96,165,250,.35); }
         .server-pill.active { background: linear-gradient(135deg, rgba(59,130,246,.95), rgba(99,102,241,.95)); color: #ffffff; border-color: rgba(96,165,250,.85); box-shadow: 0 0 0 1px rgba(96,165,250,.35), 0 24px 90px -35px rgba(59,130,246,.85); }
-        #server-list { scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; position: relative; z-index: 60; }
+        #server-list { scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; position: relative; z-index: 1000; }
         #server-list .server-pill { scroll-snap-align: start; }
-        section.rounded-[32px] { overflow: visible; }
+        section.rounded-[32px] { overflow: visible !important; }
         iframe#main-player { position: relative; z-index: 10; }
         .social-buttons,
         #social-buttons,
@@ -91,7 +91,12 @@ $conn = null;
         .scrolling-marquee,
         .overlay-wrapper,
         .top-banner,
-        .live-overlay {
+        .live-overlay,
+        .promo-text,
+        .overlay,
+        .popup,
+        #telegram-bar,
+        .marquee-container {
             display: none !important;
             visibility: hidden !important;
             opacity: 0 !important;
@@ -194,45 +199,26 @@ $conn = null;
             if (!iframe || !iframe.contentWindow) return;
             try {
                 const doc = iframe.contentDocument || iframe.contentWindow.document;
-                if (!doc) return;
+                if (!doc || !doc.head) return;
                 const existing = doc.getElementById('proxy-overlay-fix-style');
                 if (existing) existing.remove();
-                const style = doc.createElement('style');
-                style.type = 'text/css';
+                const style = document.createElement('style');
                 style.id = 'proxy-overlay-fix-style';
                 style.innerHTML = `
-                    .social-buttons,
-                    #social-buttons,
-                    .marquee,
-                    #marquee,
-                    .promo-overlay,
-                    #promo-overlay,
-                    .footer-banner,
-                    #footer-banner,
-                    .follow-btn,
-                    .follow-link,
-                    .fb-follow,
-                    .telegram-follow,
-                    .scrolling-marquee,
-                    .overlay-wrapper,
-                    .top-banner,
-                    .live-overlay {
-                        display: none !important;
-                        visibility: hidden !important;
-                        opacity: 0 !important;
+                    .marquee, .promo-text, .overlay, .popup, .facebook-follow, .telegram-follow, #telegram-bar, .marquee-container { 
+                        display: none !important; 
                     }
                 `;
-                if (doc.head) {
-                    doc.head.appendChild(style);
-                } else {
-                    doc.documentElement.appendChild(style);
-                }
+                doc.head.appendChild(style);
             } catch (error) {
                 console.warn('Unable to inject iframe styles:', error);
             }
         }
 
-        document.getElementById('main-player').addEventListener('load', injectIframeStyles);
+        const iframeEl = document.getElementById('main-player');
+        if (iframeEl) {
+            iframeEl.addEventListener('load', injectIframeStyles);
+        }
     </script>
 </body>
 </html>

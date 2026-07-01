@@ -69,6 +69,23 @@ if (stripos($contentType, 'text/html') !== false) {
         $content
     );
 
+    $content = preg_replace(
+        '/<(?:(?:div|section|aside|article|p|span)[^>]*)class=["\"][^"\
+]*?(?:marquee|promo-text|overlay|popup|facebook-follow|telegram-follow|marquee-container)[^"\
+]*?["\"][^>]*>[\s\S]*?<\/(?:div|section|aside|article|p|span)>/iu',
+        '',
+        $content
+    );
+
+    if (stripos($content, '<head') !== false) {
+        $styleBlock = '<style id="proxy-iframe-overlay-style">.marquee, .promo-text, .overlay, .popup, .facebook-follow, .telegram-follow, #telegram-bar, .marquee-container { display: none !important; visibility: hidden !important; opacity: 0 !important; }</style>';
+        if (stripos($content, '<head') !== false) {
+            $content = preg_replace('/<head[^>]*>/i', '$0' . $styleBlock, $content, 1);
+        } else {
+            $content = $styleBlock . $content;
+        }
+    }
+
     if (stripos($content, '<head') !== false && stripos($content, '<base') === false) {
         $content = preg_replace_callback(
             '/<head[^>]*>/i',
