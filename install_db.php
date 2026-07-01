@@ -22,6 +22,13 @@ try {
     )";
     $conn->exec($sql);
 
+    // Create app_settings table for global portal configuration
+    $sql = "CREATE TABLE IF NOT EXISTS app_settings (
+        setting_key VARCHAR(100) PRIMARY KEY,
+        setting_value TEXT NOT NULL
+    )";
+    $conn->exec($sql);
+
     // Insert default channels if table is empty
     $stmt = $conn->query("SELECT COUNT(*) FROM custom_channels");
     if ($stmt->fetchColumn() == 0) {

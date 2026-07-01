@@ -3,6 +3,28 @@ header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
 header("Cache-Control: post-check=0, pre-check=0", false);
 header("Pragma: no-cache");
 header("Expires: 0");
+
+require_once 'config.php';
+$serverRows = [];
+$autoplayUrl = '';
+try {
+    $conn = new PDO("mysql:host=$servername;dbname=$dbname;charset=$charset", $username, $password);
+    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $conn->exec("CREATE TABLE IF NOT EXISTS app_settings (
+        setting_key VARCHAR(100) PRIMARY KEY,
+        setting_value TEXT NOT NULL
+    )");
+    $stmt = $conn->query("SELECT id, display_name, target_url FROM custom_channels WHERE target_url != '' ORDER BY id ASC");
+    $serverRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $stmt = $conn->prepare("SELECT setting_value FROM app_settings WHERE setting_key = 'default_autoplay_url' LIMIT 1");
+    $stmt->execute();
+    $defaultAutoplayUrl = trim($stmt->fetchColumn() ?: '');
+    $autoplayUrl = $defaultAutoplayUrl !== '' ? $defaultAutoplayUrl : 'https://fifalive.click/';
+} catch (PDOException $e) {
+    $autoplayUrl = 'https://fifalive.click/';
+}
+$conn = null;
 ?>
 <!DOCTYPE html>
 <html lang="en" class="dark">
@@ -47,6 +69,11 @@ header("Expires: 0");
         .pb-safe { padding-bottom: env(safe-area-inset-bottom, 16px); }
         #bottom-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 448px; z-index: 9999; background-color: #1a1e29; }
         body { height: 100dvh; overflow: hidden; }
+        .server-pill { white-space: nowrap; padding: 0.75rem 1.25rem; border: 1px solid rgba(148,163,184,.18); border-radius: 9999px; background: rgba(15,23,42,.8); color: #cbd5e1; font-size: 0.95rem; font-weight: 600; transition: all .25s ease; }
+        .server-pill:hover { background: rgba(59,130,246,.12); border-color: rgba(96,165,250,.35); }
+        .server-pill.active { background: linear-gradient(135deg, rgba(59,130,246,.95), rgba(99,102,241,.95)); color: #ffffff; border-color: rgba(96,165,250,.85); box-shadow: 0 0 0 1px rgba(96,165,250,.35), 0 24px 90px -35px rgba(59,130,246,.85); }
+        #server-list { scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
+        #server-list .server-pill { scroll-snap-align: start; }
         @keyframes shimmer { 100% { transform: translateX(100%); } }
     </style>
 </head>
@@ -85,6 +112,44 @@ header("Expires: 0");
         <main class="flex-1 overflow-y-auto p-4 pb-40 space-y-4 relative" style="-webkit-overflow-scrolling: touch;">
             <div class="absolute top-0 left-1/2 -translate-x-1/2 w-full h-64 bg-indigo-500/10 blur-[80px] rounded-full pointer-events-none"></div>
             
+                <div class="space-y-6">
+                <section class="rounded-[32px] border border-slate-800 bg-slate-950/95 shadow-[0_30px_80px_rgba(0,0,0,0.45)] overflow-hidden">
+                    <div class="relative aspect-[16/9] bg-black">
+                        <iframe id="main-player" src="<?= htmlspecialchars($autoplayUrl, ENT_QUOTES); ?>" allowfullscreen class="w-full h-full border-0 bg-black rounded-[28px] shadow-[0_35px_120px_rgba(0,0,0,0.55)]"></iframe>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                            <div class="space-y-3">
+                                <p class="text-xs uppercase tracking-[0.32em] text-slate-500">Premium IPTV</p>
+                                <h1 class="text-3xl font-semibold text-white sm:text-4xl">Stream with multiple servers instantly</h1>
+                                <p class="max-w-2xl text-slate-400">Switch between your available streaming servers on the fly without reloading the page. Designed for a premium viewing experience.</p>
+                            </div>
+                            <div class="inline-flex items-center gap-2 rounded-full border border-slate-700/80 bg-slate-900/80 px-4 py-3 text-slate-300 shadow-lg shadow-slate-900/40">
+                                <span class="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                <span class="text-sm">Live source powered by admin backend</span>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto pb-2">
+                            <div id="server-list" class="flex gap-3 px-1 py-1 min-w-[320px]">
+                                <?php if (count($serverRows)): ?>
+                                    <?php foreach ($serverRows as $idx => $server): ?>
+                                        <?php
+                                            $buttonName = htmlspecialchars($server['display_name'] ?: 'Server ' . ($idx + 1), ENT_QUOTES);
+                                            $buttonUrl = htmlspecialchars($server['target_url'], ENT_QUOTES);
+                                        ?>
+                                        <button type="button" class="server-pill <?php echo $idx === 0 ? 'active' : ''; ?>" onclick="switchServer('<?php echo $buttonUrl; ?>', this)">
+                                            <?php echo $buttonName; ?>
+                                        </button>
+                                    <?php endforeach; ?>
+                                <?php else: ?>
+                                    <span class="text-slate-400 text-sm">No servers configured yet. Please add channels from the admin panel.</span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
             <div id="home-section" class="space-y-4">
                 <div id="loading" class="flex justify-center items-center py-10">
                     <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
@@ -396,6 +461,13 @@ header("Expires: 0");
             window.location.href = targetUrl;
         }
 
+        window.switchServer = (streamUrl, button) => {
+            const iframe = document.getElementById('main-player');
+            if (!iframe || !streamUrl) return;
+            iframe.src = streamUrl;
+            document.querySelectorAll('#server-list .server-pill').forEach(el => el.classList.remove('active'));
+            if (button) button.classList.add('active');
+        };
 
         window.handleShareClick = (platform) => {
             const shareText = `🎯 Predict the match, share this with 3 friends, and stand a chance to WIN an exclusive Jersey! 🎽

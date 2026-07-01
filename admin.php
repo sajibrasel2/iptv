@@ -28,6 +28,16 @@ if ($is_logged_in) {
         ];
         $conn = new PDO($dsn, $username, $password, $options);
 
+        $conn->exec("CREATE TABLE IF NOT EXISTS app_settings (
+            setting_key VARCHAR(100) PRIMARY KEY,
+            setting_value TEXT NOT NULL
+        )");
+
+        $defaultAutoplayUrl = '';
+        $stmt = $conn->prepare("SELECT setting_value FROM app_settings WHERE setting_key = 'default_autoplay_url' LIMIT 1");
+        $stmt->execute();
+        $defaultAutoplayUrl = trim($stmt->fetchColumn() ?: '');
+
         // ---------- Existing Channel & Ad Handlers ----------
         if (isset($_POST['add_channel'])) {
             $stmt = $conn->prepare("INSERT INTO custom_channels (display_name, target_url) VALUES (:name, :url)");
@@ -48,6 +58,12 @@ if ($is_logged_in) {
                     ':id'   => $id,
                 ]);
             }
+
+            $defaultUrl = trim($_POST['default_autoplay_url'] ?? '');
+            $stmt = $conn->prepare("INSERT INTO app_settings (setting_key, setting_value) VALUES ('default_autoplay_url', :value)
+                ON DUPLICATE KEY UPDATE setting_value = :value");
+            $stmt->execute([':value' => $defaultUrl]);
+            $defaultAutoplayUrl = $defaultUrl;
         }
 
         // ---------- Prediction Admin Handlers ----------
@@ -305,6 +321,11 @@ if ($is_logged_in) {
                             </div>
                         </div>
                         <?php endwhile; ?>
+                    </div>
+                    <div class="p-4 bg-slate-900/50 rounded-xl border border-slate-700/50">
+                        <label class="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wider">Default Auto-Play URL</label>
+                        <input type="url" name="default_autoplay_url" value="<?php echo htmlspecialchars($defaultAutoplayUrl); ?>" placeholder="https://example.com/stream" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                        <p class="mt-2 text-xs text-slate-500">This URL will load automatically when users open the frontend. If empty, the fallback URL will be used.</p>
                     </div>
                     <button type="submit" name="update_ads" class="w-full bg-indigo-500/10 hover:bg-indigo-500 text-indigo-400 hover:text-white border border-indigo-500/30 hover:border-indigo-500 font-semibold py-3 px-4 rounded-xl transition-all mt-4">Save All Ad Links</button>
                 </form>
