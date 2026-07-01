@@ -51,39 +51,15 @@ if ($content === false) {
 }
 
 if (stripos($contentType, 'text/html') !== false) {
-    $content = preg_replace('/<script\b[^>]*>[\s\S]*?<\/script>/iu', function ($matches) {
-        $script = $matches[0];
-        $blockedPatterns = [
-            'startUnlockProcess',
-            'dismissNotice',
-            'socialWidget',
-            'sticky-header-notice',
-            'fbLockerBtn',
-            'lockerCountdown',
-            'countNumber',
-            'facebook.com/tahmidx.tech2',
-            't.me/tahmidxa',
-            'follow on facebook',
-            'follow on telegram'
-        ];
-        foreach ($blockedPatterns as $pattern) {
-            if (stripos($script, $pattern) !== false) {
-                return '';
-            }
-        }
-        return $script;
-    }, $content);
-
     $content = preg_replace('/<(?:div|section|aside|article|p|span|button|a)[^>]*(?:id|class)=["\'][^"\']*(?:socialWidget|social-box|social-btn|close-social|sticky-header-notice|sticky-notice|marquee-wrapper|marquee-text|fbLockerBtn|locker-fb-btn|lockerCountdown|countdown-text|countNumber)[^"\']*["\'][^>]*>[\s\S]*?<\/(?:div|section|aside|article|p|span|button|a)>/iu', '', $content);
     $content = preg_replace('/<(?:div|section|aside|article|p|span|button|a)[^>]*(?:id|class)=["\'][^"\']*(?:socialWidget|social-box|social-btn|close-social|sticky-header-notice|sticky-notice|marquee-wrapper|marquee-text|fbLockerBtn|locker-fb-btn|lockerCountdown|countdown-text|countNumber)[^"\']*["\'][^>]*\/>/iu', '', $content);
 
     $overlayCss = '<style id="proxy-iframe-overlay-style">#socialWidget, .social-box, .social-btn, .close-social, #sticky-header-notice, .sticky-notice, .marquee-wrapper, .marquee-text, #fbLockerBtn, .locker-fb-btn, #lockerCountdown, .countdown-text, #countNumber { display: none !important; visibility: hidden !important; opacity: 0 !important; height: 0 !important; min-height: 0 !important; overflow: hidden !important; pointer-events: none !important; }</style>';
-    $overlayScript = '<script id="proxy-overlay-guard">(function(){const selectors=["#socialWidget",".social-box",".social-btn",".close-social","#sticky-header-notice",".sticky-notice",".marquee-wrapper",".marquee-text","#fbLockerBtn",".locker-fb-btn","#lockerCountdown",".countdown-text","#countNumber"];const removeNow=()=>{selectors.forEach(sel=>document.querySelectorAll(sel).forEach(el=>el.remove()));document.querySelectorAll("body *").forEach(el=>{const text=(el.textContent||"").toLowerCase();if((text.includes("follow on facebook")||text.includes("follow on telegram")||text.includes("t.me/")||text.includes("facebook.com"))&&(el.className||el.id)){const name=(el.className||"").toString()+" "+(el.id||"");if(/social|marquee|notice|locker/i.test(name))el.remove();}})};removeNow();const observer=new MutationObserver(()=>removeNow());observer.observe(document.documentElement||document.body,{childList:true,subtree:true});window.addEventListener("load",removeNow);})();</script>';
 
     if (stripos($content, '<head') !== false) {
-        $content = preg_replace('/<head[^>]*>/i', '$0' . $overlayCss . $overlayScript, $content, 1);
+        $content = preg_replace('/<head[^>]*>/i', '$0' . $overlayCss, $content, 1);
     } else {
-        $content = $overlayCss . $overlayScript . $content;
+        $content = $overlayCss . $content;
     }
 
     if (stripos($content, '<head') !== false && stripos($content, '<base') === false) {
