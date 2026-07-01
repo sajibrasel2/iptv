@@ -25,6 +25,7 @@ try {
     $autoplayUrl = 'https://fifalive.click/';
 }
 $conn = null;
+$initialPlayerSrc = 'proxy.php?url=' . rawurlencode($autoplayUrl);
 ?>
 <!DOCTYPE html>
 <html lang="en" class="dark">
@@ -122,7 +123,7 @@ $conn = null;
         <main class="flex-1 overflow-y-auto p-4 pb-8 relative" style="-webkit-overflow-scrolling: touch;">
             <section class="rounded-[32px] border border-slate-800 bg-slate-950/95 shadow-[0_30px_80px_rgba(0,0,0,0.45)] overflow-hidden">
                 <div class="relative aspect-[16/9] bg-black">
-                    <iframe id="main-player" src="<?= htmlspecialchars($autoplayUrl, ENT_QUOTES); ?>" sandbox="allow-scripts allow-presentation" allowfullscreen class="w-full h-full border-0 bg-black rounded-[28px] shadow-[0_35px_120px_rgba(0,0,0,0.55)]"></iframe>
+                    <iframe id="main-player" src="<?= htmlspecialchars($initialPlayerSrc, ENT_QUOTES); ?>" sandbox="allow-scripts allow-same-origin allow-presentation" allowfullscreen class="w-full h-full border-0 bg-black rounded-[28px] shadow-[0_35px_120px_rgba(0,0,0,0.55)]"></iframe>
                 </div>
                 <div class="pt-4 pb-4 px-4">
                     <div class="overflow-x-auto">
@@ -202,11 +203,24 @@ $conn = null;
                 if (!doc || !doc.head) return;
                 const existing = doc.getElementById('proxy-overlay-fix-style');
                 if (existing) existing.remove();
+
                 const style = document.createElement('style');
                 style.id = 'proxy-overlay-fix-style';
                 style.innerHTML = `
-                    .marquee, .promo-text, .overlay, .popup, .facebook-follow, .telegram-follow, #telegram-bar, .marquee-container { 
-                        display: none !important; 
+                    * { pointer-events: auto !important; }
+                    #socialWidget, .social-box, .social-btn, .close-social,
+                    #sticky-header-notice, .sticky-notice, .marquee-wrapper, .marquee-text,
+                    #fbLockerBtn, #lockerCountdown, #countNumber,
+                    .modal, .popup, .overlay, [class*="overlay"], [id*="overlay"],
+                    .announcement-bar, .top-bar, .follow-container, .social-buttons,
+                    .marquee, .marquee-container {
+                        display: none !important;
+                        visibility: hidden !important;
+                        opacity: 0 !important;
+                        height: 0 !important;
+                        min-height: 0 !important;
+                        overflow: hidden !important;
+                        pointer-events: none !important;
                     }
                 `;
                 doc.head.appendChild(style);
