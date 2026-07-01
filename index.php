@@ -101,78 +101,32 @@ $conn = null;
             </div>
         </header>
 
-        <div class="app-download-banner" style="background: linear-gradient(to right, #1a2a6c, #b21f1f, #fdbb2d); padding: 25px; border-radius: 15px; text-align: center; color: white; margin: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.3);">
-            <h2 style="margin-top: 0; margin-bottom: 10px; font-weight:bold;">📺 Download TCTV App</h2>
-            <p style="margin-bottom: 20px; font-size:14px;">Get all your favorite live sports and movies right in your pocket! Download our official app for a faster and smoother streaming experience.</p>
-            <a href="https://techandclick.site/iptv/download.html" style="background: white; color: #b21f1f; padding: 12px 30px; text-decoration: none; font-weight: bold; border-radius: 50px; display: inline-block; transition: 0.3s; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
-                ⬇ Download Now
-            </a>
-        </div>
 
-        <main class="flex-1 overflow-y-auto p-4 pb-40 space-y-4 relative" style="-webkit-overflow-scrolling: touch;">
-            <div class="absolute top-0 left-1/2 -translate-x-1/2 w-full h-64 bg-indigo-500/10 blur-[80px] rounded-full pointer-events-none"></div>
-            
-                <div class="space-y-6">
-                <section class="rounded-[32px] border border-slate-800 bg-slate-950/95 shadow-[0_30px_80px_rgba(0,0,0,0.45)] overflow-hidden">
-                    <div class="relative aspect-[16/9] bg-black">
-                        <iframe id="main-player" src="<?= htmlspecialchars($autoplayUrl, ENT_QUOTES); ?>" allowfullscreen class="w-full h-full border-0 bg-black rounded-[28px] shadow-[0_35px_120px_rgba(0,0,0,0.55)]"></iframe>
-                    </div>
-                    <div class="p-6 space-y-4">
-                        <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                            <div class="space-y-3">
-                                <p class="text-xs uppercase tracking-[0.32em] text-slate-500">Premium IPTV</p>
-                                <h1 class="text-3xl font-semibold text-white sm:text-4xl">Stream with multiple servers instantly</h1>
-                                <p class="max-w-2xl text-slate-400">Switch between your available streaming servers on the fly without reloading the page. Designed for a premium viewing experience.</p>
-                            </div>
-                            <div class="inline-flex items-center gap-2 rounded-full border border-slate-700/80 bg-slate-900/80 px-4 py-3 text-slate-300 shadow-lg shadow-slate-900/40">
-                                <span class="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                                <span class="text-sm">Live source powered by admin backend</span>
-                            </div>
-                        </div>
-                        <div class="overflow-x-auto pb-2">
-                            <div id="server-list" class="flex gap-3 px-1 py-1 min-w-[320px]">
-                                <?php if (count($serverRows)): ?>
-                                    <?php foreach ($serverRows as $idx => $server): ?>
-                                        <?php
-                                            $buttonName = htmlspecialchars($server['display_name'] ?: 'Server ' . ($idx + 1), ENT_QUOTES);
-                                            $buttonUrl = htmlspecialchars($server['target_url'], ENT_QUOTES);
-                                        ?>
-                                        <button type="button" class="server-pill <?php echo $idx === 0 ? 'active' : ''; ?>" onclick="switchServer('<?php echo $buttonUrl; ?>', this)">
-                                            <?php echo $buttonName; ?>
-                                        </button>
-                                    <?php endforeach; ?>
-                                <?php else: ?>
-                                    <span class="text-slate-400 text-sm">No servers configured yet. Please add channels from the admin panel.</span>
-                                <?php endif; ?>
-                            </div>
+        <main class="flex-1 overflow-y-auto p-4 pb-8 relative" style="-webkit-overflow-scrolling: touch;">
+            <section class="rounded-[32px] border border-slate-800 bg-slate-950/95 shadow-[0_30px_80px_rgba(0,0,0,0.45)] overflow-hidden">
+                <div class="relative aspect-[16/9] bg-black">
+                    <iframe id="main-player" src="<?= htmlspecialchars($autoplayUrl, ENT_QUOTES); ?>" allowfullscreen class="w-full h-full border-0 bg-black rounded-[28px] shadow-[0_35px_120px_rgba(0,0,0,0.55)]"></iframe>
+                </div>
+                <div class="pt-4 pb-4 px-4">
+                    <div class="overflow-x-auto">
+                        <div id="server-list" class="flex gap-3 px-1 py-1 min-w-[320px]">
+                            <?php if (count($serverRows)): ?>
+                                <?php foreach ($serverRows as $idx => $server): ?>
+                                    <?php
+                                        $buttonName = htmlspecialchars($server['display_name'] ?: 'Server ' . ($idx + 1), ENT_QUOTES);
+                                        $buttonUrl = htmlspecialchars($server['target_url'], ENT_QUOTES);
+                                    ?>
+                                    <button type="button" class="server-pill <?php echo $idx === 0 ? 'active' : ''; ?>" onclick="switchServer('<?php echo $buttonUrl; ?>', this)">
+                                        <?php echo $buttonName; ?>
+                                    </button>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <span class="text-slate-400 text-sm">No servers configured yet. Please add channels from the admin panel.</span>
+                            <?php endif; ?>
                         </div>
                     </div>
-                </section>
-            </div>
-
-            <div id="home-section" class="space-y-4">
-                <div id="loading" class="flex justify-center items-center py-10">
-                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
                 </div>
-                <div id="cards-container" class="space-y-4"></div>
-            </div>
-
-            <div id="favorites-section" class="hidden space-y-4">
-                <h2 class="text-2xl font-bold text-white mb-2">My Favorites</h2>
-                <div id="favorites-container" class="space-y-4">
-                    <p class="text-center text-slate-400 py-10">You haven't added any channels to favorites yet.</p>
-                </div>
-            </div>
-
-            <div id="profile-section" class="hidden space-y-6">
-                <div class="flex flex-col items-center py-6 border-b border-white/5 space-y-3">
-                    <div class="w-20 h-20 rounded-full bg-gradient-to-tr from-indigo-500 to-cyan-500 flex items-center justify-center text-3xl font-bold text-white shadow-lg">U</div>
-                    <div class="text-center">
-                        <h2 class="text-xl font-bold text-white">Guest User</h2>
-                        <p class="text-xs text-slate-400">IPTV Hub Member</p>
-                    </div>
-                </div>
-            </div>
+            </section>
         </main>
 
         <nav id="bottom-nav" class="border-t border-white/5 pb-safe">
