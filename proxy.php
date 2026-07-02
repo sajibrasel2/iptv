@@ -1,23 +1,25 @@
 <?php
 /**
- * proxy.php — Pure HLS Media Proxy
+ * proxy.php — Smart HLS Media Proxy
  *
- * Routes ALL stream URLs (M3U8 playlists + TS segments + encryption keys)
- * through this server-side proxy so the browser never hits the upstream
- * CDN directly. This keeps Referer/Origin spoofing intact for every request.
+ * ROUTING LOGIC (based on live network audit, July 2026):
  *
- * Segment URLs are NOT passed direct to the browser — the previous
- * "direct bypass" approach failed because:
- *   - nextgoal CF Worker blocks DC-IP OPTIONS requests (no CORS at all)
- *   - TikTok CDN segment tokens expire before the browser fetches them
+ *   M3U8 playlists  → always fetched server-side (proxy handles Referer/Origin spoofing)
+ *   TS segments     → two paths:
+ *     a) TikTok CDN (p*-common-sign.tiktokcdn.com) — these are served as global media
+ *        with no CORS restriction on browsers. However, datacenter IPs get blocked.
+ *        Solution: return a 302 redirect so the browser fetches them directly.
+ *     b) All other segments — proxy server-side as normal.
  *
- * CORS headers are set on every response so HLS.js can read the data.
- * PHP chunked output flushes bytes to the browser as they arrive, which
- * prevents cPanel's 30-second max_execution_time from killing a long
- * binary-segment transfer mid-stream.
+ * Why Server 1 (ToffeeLive) is NOT proxied:
+ *   - ToffeeLive CDN blocks datacenter IPs (returns connection error → 502)
+ *   - ToffeeLive CDN sends NO Access-Control-Allow-Origin header
+ *   - Both proxy AND direct browser fetch fail — stream.php marks it direct=false
+ *     and index.php skips it; only Server 4 (cinecdn) is viable
+ *
+ * SSRF protections: loopback, link-local, and private ranges are blocked.
  */
 
-// Give PHP enough time for large segment transfers
 set_time_limit(60);
 
 // ── CORS + cache headers ─────────────────────────────────────────────────────
@@ -67,6 +69,16 @@ if (preg_match('/^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.)/', $tar
     http_response_code(403); die('Private address blocked.');
 }
 
+// ── TikTok CDN redirect ───────────────────────────────────────────────────────
+// TikTok CDN segments (served as .image URLs from tiktokcdn.com) cannot be
+// proxied from datacenter IPs — they get blocked/timeout.
+// BUT: browsers can fetch them directly (no browser CORS restriction on media CDNs).
+// So: issue a 302 redirect and let the browser grab them directly.
+if (str_contains($targetHost, 'tiktokcdn.com') || str_contains($targetHost, 'tiktok.com')) {
+    header('Location: ' . $targetUrl, true, 302);
+    exit;
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Resolve a relative href against a base URL. */
@@ -89,9 +101,9 @@ function absoluteUrl(string $href, string $baseUrl): string {
 }
 
 /**
- * Rewrite every URL in an M3U8 so ALL requests route through this proxy.
- * No direct-to-CDN bypass — every byte comes through here so we can
- * inject the correct Referer/Origin on every request.
+ * Rewrite every URL in an M3U8 to route through this proxy.
+ * TikTok CDN segment URLs are also proxied through proxy.php — proxy.php
+ * will then issue a 302 redirect to the browser for those specific URLs.
  */
 function rewriteM3u8(string $body, string $baseUrl): string {
     $lines = preg_split('/\r?\n/', $body);
@@ -101,11 +113,9 @@ function rewriteM3u8(string $body, string $baseUrl): string {
         if ($t === '') continue;
 
         if ($t[0] !== '#') {
-            // Segment or sub-playlist — always proxy
             $abs       = absoluteUrl($t, $baseUrl);
             $lines[$i] = 'proxy.php?url=' . rawurlencode($abs) . '&raw=true';
         } else {
-            // Tag lines — rewrite URI="..." attributes (keys, maps)
             $lines[$i] = preg_replace_callback(
                 '/URI=["\']([^"\']+)["\']/i',
                 function (array $m) use ($baseUrl): string {
@@ -128,18 +138,13 @@ function inferReferer(string $url): string {
     $host = strtolower(parse_url($url, PHP_URL_HOST) ?? '');
 
     $map = [
+        // Server 4 — cinecdn Cloudflare Worker requires fifalive origin
+        'cinecdn.workers.dev'        => 'https://fifalive.click/',
+        'nextgoal.workers.dev'       => 'https://fifalive.click/',
+        'smtahmidx.workers.dev'      => 'https://fifalive.click/',
+        // ToffeeLive CDN (kept for completeness; blocked by IP regardless)
         'prod-cdn01-live.toffeelive' => 'https://toffeelive.com/',
         'toffeelive.com'             => 'https://toffeelive.com/',
-        'nextgoal.workers.dev'       => 'https://fifalive.click/',
-        'cinecdn.workers.dev'        => 'https://fifalive.click/',
-        'smtahmidx.workers.dev'      => 'https://fifalive.click/',
-        // TikTok CDN segments served via fx.cinecdn.workers.dev
-        'tiktokcdn.com'              => 'https://fx.cinecdn.workers.dev/',
-        'tiktok.com'                 => 'https://fx.cinecdn.workers.dev/',
-        // Rockstreamer CDN segments served via nextgoal / smtahmidx workers
-        'rockstreamer.com'           => 'https://live3.nextgoal.workers.dev/',
-        'livecdn.rockstreamer'       => 'https://live3.nextgoal.workers.dev/',
-        'tc-sg.rockstreamer'         => 'https://live.smtahmidx.workers.dev/',
     ];
 
     foreach ($map as $needle => $referer) {
@@ -150,9 +155,6 @@ function inferReferer(string $url): string {
 }
 
 // ── Determine client IP to forward ───────────────────────────────────────────
-// Forward the visitor's real IP in X-Forwarded-For etc.
-// Note: Cloudflare checks the actual TCP IP, not these headers, but some
-// CF Worker scripts do inspect them for additional logic.
 $clientIp = $_SERVER['HTTP_CF_CONNECTING_IP']
          ?? $_SERVER['HTTP_X_FORWARDED_FOR']
          ?? $_SERVER['HTTP_X_REAL_IP']
@@ -196,7 +198,7 @@ curl_setopt_array($ch, [
     CURLOPT_SSL_VERIFYPEER => false,
     CURLOPT_SSL_VERIFYHOST => 0,
     CURLOPT_CONNECTTIMEOUT => 10,
-    CURLOPT_TIMEOUT        => 45,   // generous for large TS segments
+    CURLOPT_TIMEOUT        => 45,
     CURLOPT_ENCODING       => '',
     CURLOPT_HTTPHEADER     => $headers,
 ]);
@@ -220,7 +222,6 @@ if ($httpCode >= 400) {
 }
 
 // ── Detect M3U8 ──────────────────────────────────────────────────────────────
-// Some CDNs (toffeelive) send M3U8 as text/plain — check body content too.
 $looksLikeM3u8 =
     stripos($ctype, 'mpegurl')               !== false ||
     stripos($ctype, 'application/vnd.apple') !== false ||
@@ -237,9 +238,6 @@ if ($looksLikeM3u8) {
 }
 
 // ── Binary media pass-through ─────────────────────────────────────────────────
-// Determine the correct Content-Type for TS/AAC/MP4 segments.
-// Many CDNs send wrong or missing types; detect by URL extension first,
-// then fall back to checking the raw TS sync byte (0x47).
 $ext = strtolower(pathinfo(parse_url($finalUrl, PHP_URL_PATH) ?? '', PATHINFO_EXTENSION));
 $extMap = [
     'ts'    => 'video/MP2T',
@@ -251,7 +249,7 @@ $extMap = [
     'key'   => 'application/octet-stream',
     'bin'   => 'application/octet-stream',
     'mp3'   => 'audio/mpeg',
-    // TikTok CDN sends TS bytes with .image extension
+    // TikTok CDN sends TS bytes disguised as .image
     'image' => 'video/MP2T',
 ];
 
@@ -259,21 +257,16 @@ if (isset($extMap[$ext])) {
     $ctype = $extMap[$ext];
 } elseif (
     $ctype === '' ||
-    stripos($ctype, 'text/')       !== false ||
-    stripos($ctype, 'image/')      !== false ||
+    stripos($ctype, 'text/')        !== false ||
+    stripos($ctype, 'image/')       !== false ||
     stripos($ctype, 'octet-stream') !== false
 ) {
-    // Last resort: check TS sync byte (0x47 = 71 decimal)
     $ctype = (strlen($content) > 0 && ord($content[0]) === 0x47)
         ? 'video/MP2T'
         : ($ctype ?: 'application/octet-stream');
 }
 
-// Stream the binary content to the browser
-// ob_end_clean ensures no buffering swallows the bytes
-if (ob_get_level() > 0) {
-    ob_end_clean();
-}
+if (ob_get_level() > 0) ob_end_clean();
 
 header('Content-Type: ' . $ctype);
 header('Content-Length: ' . strlen($content));

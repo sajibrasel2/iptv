@@ -2,16 +2,21 @@
 /**
  * stream.php — Live Stream Extraction API
  *
- * Fetches fifalive.click, parses the M3U8, and returns all servers instantly.
- * No per-server validation — HLS.js handles that at play time.
+ * Fetches fifalive.click M3U8 and returns all server URLs instantly.
+ * No per-server validation. HLS.js handles that at play time.
  *
- * Each server entry carries a "direct" flag:
- *   "direct": true  → CDN allows browser CORS; index.php sends raw_url straight
- *                      to HLS.js, bypassing proxy.php (avoids datacenter-IP block)
- *   "direct": false → Must route through proxy.php (applies Referer spoofing)
+ * Server routing (determined by live network audit):
  *
- * ToffeeLive CDN blocks datacenter IPs with HTTP 502, but it serves with
- * Access-Control-Allow-Origin: * so the browser can fetch it directly.
+ *   ToffeeLive CDN  → "skip": true
+ *     - cPanel datacenter IP is TCP-blocked (502)
+ *     - No CORS headers on CDN — browser direct fetch also fails
+ *     - Unplayable until ToffeeLive fixes their CDN policy
+ *
+ *   Cloudflare Worker URLs (nextgoal, smtahmidx, cinecdn) → routed via proxy.php
+ *     - proxy.php sends Referer: fifalive.click so the Worker allows the request
+ *     - Workers return M3U8 with TikTok CDN segment URLs
+ *     - proxy.php 302-redirects TikTok segment requests to the browser directly
+ *       (TikTok CDN blocks datacenter proxy IPs but allows browser fetches)
  */
 
 set_time_limit(20);
@@ -29,22 +34,21 @@ $FALLBACK = [
     'logo'        => '',
     'raw_url'     => 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
     'proxy_url'   => 'proxy.php?url=' . rawurlencode('https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8') . '&raw=true',
-    'direct'      => true,   // mux test CDN has open CORS
     'is_fallback' => true,
 ];
 
-// ── Hosts that block datacenter IPs but allow browser CORS ───────────────────
-// These must be fetched DIRECTLY by the browser, not proxied through cPanel.
-$DIRECT_HOSTS = [
+// ── Hosts that cannot be proxied OR directly fetched by browser ───────────────
+// These are skipped entirely to prevent auto-switching to a dead server.
+$SKIP_HOSTS = [
     'toffeelive.com',
     'prod-cdn01-live.toffeelive.com',
     'prod-cdn02-live.toffeelive.com',
     'prod-cdn03-live.toffeelive.com',
 ];
 
-function isDirect(string $url, array $directHosts): bool {
+function shouldSkip(string $url, array $skipHosts): bool {
     $host = strtolower(parse_url($url, PHP_URL_HOST) ?? '');
-    foreach ($directHosts as $h) {
+    foreach ($skipHosts as $h) {
         if ($host === $h || str_ends_with($host, '.' . $h)) return true;
     }
     return false;
@@ -70,7 +74,7 @@ function isM3u8(string $body, string $ctype): bool {
 }
 
 // ── Parse master M3U8 ────────────────────────────────────────────────────────
-function parseMaster(string $body, array $directHosts): array {
+function parseMaster(string $body, array $skipHosts): array {
     $lines   = preg_split('/\r?\n/', trim($body));
     $servers = [];
     $pending = ['name' => '', 'group' => 'Live', 'logo' => ''];
@@ -96,19 +100,21 @@ function parseMaster(string $body, array $directHosts): array {
         }
 
         if (isset($line[0]) && $line[0] !== '#') {
-            $clean  = sanitiseUrl($line);
-            $direct = isDirect($clean, $directHosts);
+            $clean = sanitiseUrl($line);
 
             if (filter_var($clean, FILTER_VALIDATE_URL)) {
+                // Skip hosts that are confirmed unplayable (no proxy + no CORS)
+                if (shouldSkip($clean, $skipHosts)) {
+                    $pending = ['name' => '', 'group' => 'Live', 'logo' => ''];
+                    continue;
+                }
+
                 $servers[] = [
                     'name'      => $pending['name']  ?: ('Server ' . (count($servers) + 1)),
                     'group'     => $pending['group'] ?: 'Live',
                     'logo'      => $pending['logo']  ?? '',
                     'raw_url'   => $clean,
-                    // proxy_url still built for non-direct servers
                     'proxy_url' => 'proxy.php?url=' . rawurlencode($clean) . '&raw=true',
-                    // direct=true means index.php will use raw_url instead of proxy_url
-                    'direct'    => $direct,
                 ];
             }
             $pending = ['name' => '', 'group' => 'Live', 'logo' => ''];
@@ -157,7 +163,8 @@ if ($body === false || $body === '') {
 } elseif (!isM3u8($body, $ctype)) {
     $errors[] = 'fifalive.click returned non-M3U8 (CT=' . $ctype . ') — possible paywall/captcha';
 } else {
-    $servers = parseMaster($body, $DIRECT_HOSTS);
+    // Skip ToffeeLive (confirmed unplayable), keep Cloudflare Worker servers
+    $servers = parseMaster($body, $SKIP_HOSTS);
 }
 
 $servers[] = $FALLBACK;
