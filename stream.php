@@ -2,21 +2,9 @@
 /**
  * stream.php — Live Stream Extraction API
  *
- * Fetches fifalive.click M3U8 and returns all server URLs instantly.
- * No per-server validation. HLS.js handles that at play time.
- *
- * Server routing (determined by live network audit):
- *
- *   ToffeeLive CDN  → "skip": true
- *     - cPanel datacenter IP is TCP-blocked (502)
- *     - No CORS headers on CDN — browser direct fetch also fails
- *     - Unplayable until ToffeeLive fixes their CDN policy
- *
- *   Cloudflare Worker URLs (nextgoal, smtahmidx, cinecdn) → routed via proxy.php
- *     - proxy.php sends Referer: fifalive.click so the Worker allows the request
- *     - Workers return M3U8 with TikTok CDN segment URLs
- *     - proxy.php 302-redirects TikTok segment requests to the browser directly
- *       (TikTok CDN blocks datacenter proxy IPs but allows browser fetches)
+ * Fetches fifalive.click M3U8 and returns ALL servers instantly.
+ * No per-server validation, no host filtering.
+ * HLS.js handles failure and auto-switches at play time.
  */
 
 set_time_limit(20);
@@ -37,37 +25,6 @@ $FALLBACK = [
     'is_fallback' => true,
 ];
 
-// ── Hosts that cannot be proxied OR directly fetched by browser ───────────────
-// Confirmed dead via live network audit — skip entirely so the player never
-// wastes time connecting to them and auto-switching through failures.
-//
-//   toffeelive.com     → cPanel datacenter IP TCP-blocked (502), no CORS headers
-//   nextgoal.workers   → HTTP 429 rate-limited (Cloudflare error 1027)
-//   smtahmidx.workers  → HTTP 403 "only allowed on fifalive.click"
-//
-// Only fx.cinecdn.workers.dev (Server 4) works reliably via proxy.
-$SKIP_HOSTS = [
-    // ToffeeLive — IP blocked + no CORS
-    'toffeelive.com',
-    'prod-cdn01-live.toffeelive.com',
-    'prod-cdn02-live.toffeelive.com',
-    'prod-cdn03-live.toffeelive.com',
-    // nextgoal — rate limited 429
-    'live3.nextgoal.workers.dev',
-    'nextgoal.workers.dev',
-    // smtahmidx — hard 403 origin block
-    'live.smtahmidx.workers.dev',
-    'smtahmidx.workers.dev',
-];
-
-function shouldSkip(string $url, array $skipHosts): bool {
-    $host = strtolower(parse_url($url, PHP_URL_HOST) ?? '');
-    foreach ($skipHosts as $h) {
-        if ($host === $h || str_ends_with($host, '.' . $h)) return true;
-    }
-    return false;
-}
-
 // ── Fix malformed URLs (e.g. workers*dev -> workers.dev) ─────────────────────
 function sanitiseUrl(string $raw): string {
     $url = trim($raw);
@@ -87,8 +44,8 @@ function isM3u8(string $body, string $ctype): bool {
     return false;
 }
 
-// ── Parse master M3U8 ────────────────────────────────────────────────────────
-function parseMaster(string $body, array $skipHosts): array {
+// ── Parse master M3U8 — returns every entry, no filtering ────────────────────
+function parseMaster(string $body): array {
     $lines   = preg_split('/\r?\n/', trim($body));
     $servers = [];
     $pending = ['name' => '', 'group' => 'Live', 'logo' => ''];
@@ -115,14 +72,7 @@ function parseMaster(string $body, array $skipHosts): array {
 
         if (isset($line[0]) && $line[0] !== '#') {
             $clean = sanitiseUrl($line);
-
             if (filter_var($clean, FILTER_VALIDATE_URL)) {
-                // Skip hosts that are confirmed unplayable (no proxy + no CORS)
-                if (shouldSkip($clean, $skipHosts)) {
-                    $pending = ['name' => '', 'group' => 'Live', 'logo' => ''];
-                    continue;
-                }
-
                 $servers[] = [
                     'name'      => $pending['name']  ?: ('Server ' . (count($servers) + 1)),
                     'group'     => $pending['group'] ?: 'Live',
@@ -177,8 +127,7 @@ if ($body === false || $body === '') {
 } elseif (!isM3u8($body, $ctype)) {
     $errors[] = 'fifalive.click returned non-M3U8 (CT=' . $ctype . ') — possible paywall/captcha';
 } else {
-    // Skip ToffeeLive (confirmed unplayable), keep Cloudflare Worker servers
-    $servers = parseMaster($body, $SKIP_HOSTS);
+    $servers = parseMaster($body);
 }
 
 $servers[] = $FALLBACK;
