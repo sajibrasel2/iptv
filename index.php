@@ -695,45 +695,58 @@ const TCTV = window.TCTV = {
   async init(){
     this.showSpinner('Fetching stream list…','');
 
+    // Hard 8-second timeout — never spin forever waiting for stream.php
+    const controller = new AbortController();
+    const fetchTimeout = setTimeout(() => controller.abort(), 8000);
+
     try{
-      const res=await fetch('stream.php');
-      if(!res.ok)throw new Error('HTTP '+res.status);
-      const data=await res.json();
+      const res = await fetch('stream.php', { signal: controller.signal });
+      clearTimeout(fetchTimeout);
 
-      if(!data.ok && !data.servers){
-        throw new Error(data.error||'No streams available');
+      if(!res.ok) throw new Error('stream.php HTTP ' + res.status);
+      const data = await res.json();
+
+      // Live servers come first — always index 0 gets auto-played
+      // DB custom channels are appended after so they never block live streams
+      const liveServers   = (data.servers || []).filter(s => !s.is_fallback);
+      const fallback      = (data.servers || []).filter(s =>  s.is_fallback);
+      const customServers = this.customChannelsFromPHP || [];
+
+      // Order: live → custom DB → fallback test stream
+      this.servers = [...liveServers, ...customServers, ...fallback];
+
+      if(this.servers.length === 0){
+        throw new Error('No streams available.');
       }
 
-      // Merge: live servers + custom channels from DB
-      this.servers=(data.servers||[]).concat(this.customChannelsFromPHP);
-
-      if(this.servers.length===0){
-        throw new Error('No streams available. Check back later.');
-      }
-
-      // Show match card if we have live FIFA World Cup streams
-      const hasFifa=this.servers.some(s=>(s.name||'').toLowerCase().includes('fifa'));
+      // Show match info card if FIFA streams are present
+      const hasFifa = liveServers.some(s => (s.name||'').toLowerCase().includes('fifa'));
       if(hasFifa){
-        this.showMatchCard('FIFA World Cup 2026','Group Stage • Live','Jun 11 – Jul 19');
+        this.showMatchCard('FIFA World Cup 2026', 'Live • Sports', 'June 11 – July 19 2026');
       }
 
       this.buildPills();
-      this.loadServer(0);
+      this.loadServer(0);  // always the first LIVE server
 
-      // If warning present, display it
-      if(data.warning)this.setWarning(data.warning);
+      if(data.warning) this.setWarning(data.warning);
 
-    }catch(err){
-      console.error('[stream.php]',err);
+    } catch(err){
+      clearTimeout(fetchTimeout);
+      console.error('[stream.php error]', err);
 
-      // Fallback to DB channels if stream.php failed
-      if(this.customChannelsFromPHP.length>0){
-        this.servers=this.customChannelsFromPHP;
+      // Only use DB channels as emergency fallback — and only if we have them
+      // Do NOT silently spin — show an error immediately
+      if(this.customChannelsFromPHP && this.customChannelsFromPHP.length > 0){
+        this.servers = [...this.customChannelsFromPHP];
         this.buildPills();
         this.loadServer(0);
-        this.setWarning('⚠ Live sources unavailable. Showing saved channels.');
-      }else{
-        this.showError('Could not load stream list',err.message);
+        this.setWarning('⚠ Live source unavailable. Showing saved channels.');
+      } else {
+        // Nothing to play — show a clear error message right away
+        const reason = err.name === 'AbortError'
+          ? 'Stream list timed out. Check back shortly.'
+          : 'Could not load streams: ' + err.message;
+        this.showError('Stream source offline', reason);
       }
     }
   }
