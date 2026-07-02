@@ -98,7 +98,66 @@ function absoluteUrl(string $href, string $baseUrl): string {
 }
 
 /**
- * Rewrite every URL in an M3U8 playlist to pass through this proxy.
+ * Hosts whose TS segments have CORS headers (Access-Control-Allow-Origin: *)
+ * and can therefore be fetched DIRECTLY by the browser.
+ *
+ * Confirmed by live CORS probe:
+ *   - p16-common-sign.tiktokcdn.com  → ACAO: *       ✓
+ *   - p19-common-sign.tiktokcdn.com  → ACAO: *       ✓
+ *   - fx.cinecdn.workers.dev         → ACAO: techandclick.site ✓
+ *   - Any *.tiktokcdn.com            → ACAO: *       ✓
+ *
+ * Confirmed BLOCKED for direct fetch (CF blocks residential simulation from DC IP):
+ *   - live3.nextgoal.workers.dev     → OPTIONS=403   ✗  (use proxy or skip)
+ *   - live.smtahmidx.workers.dev     → no CORS       ✗
+ */
+function isCorsOpen(string $absUrl): bool {
+    $host = strtolower(parse_url($absUrl, PHP_URL_HOST) ?? '');
+    $openHosts = [
+        'tiktokcdn.com',          // TikTok CDN — all subdomains send ACAO: *
+        'tiktok.com',
+        'cinecdn.workers.dev',    // fx.cinecdn sends ACAO: techandclick.site
+    ];
+    foreach ($openHosts as $needle) {
+        if (str_contains($host, $needle)) return true;
+    }
+    return false;
+}
+
+/**
+ * Determine whether a URL line in a playlist is a media segment
+ * (TS / fMP4 / AAC chunk) vs a sub-playlist (.m3u8).
+ */
+function isMediaSegment(string $absUrl): bool {
+    $path = strtolower(parse_url($absUrl, PHP_URL_PATH) ?? '');
+    $ext  = pathinfo($path, PATHINFO_EXTENSION);
+
+    // Explicit media extensions
+    if (in_array($ext, ['ts', 'aac', 'm4s', 'mp4', 'fmp4', 'm4v', 'mp3', 'key', 'bin', 'image'], true)) {
+        return true;
+    }
+    // .m3u8 is always a sub-playlist — must go through proxy for header injection
+    if ($ext === 'm3u8') return false;
+
+    // No recognisable extension — heuristic: if the URL contains query params
+    // like ?type=ts or base64-looking ?url=, it's a segment proxy URL
+    $query = parse_url($absUrl, PHP_URL_QUERY) ?? '';
+    if (str_contains($query, 'type=ts') || str_contains($query, 'url=')) return true;
+
+    // TikTok CDN uses .image extension-less URLs that are actually TS
+    if (str_contains(strtolower(parse_url($absUrl, PHP_URL_HOST) ?? ''), 'tiktokcdn')) return true;
+
+    // Default: proxy it (safe)
+    return false;
+}
+
+/**
+ * Rewrite every URL in an M3U8 playlist.
+ *
+ * Strategy (based on live CORS audit):
+ *   - Sub-playlists (.m3u8)   → always proxy.php (need header injection)
+ *   - Segments from CORS-open CDNs → write RAW URL (browser fetches directly)
+ *   - Segments from CORS-blocked hosts → proxy.php (server fetches, forwards)
  */
 function rewriteM3u8(string $body, string $baseUrl): string {
     $lines = preg_split('/\r?\n/', $body);
@@ -108,15 +167,25 @@ function rewriteM3u8(string $body, string $baseUrl): string {
         if ($t === '') continue;
 
         if ($t[0] !== '#') {
-            // Segment line (TS, MP4, fMP4, sub-playlist)
-            $abs       = absoluteUrl($t, $baseUrl);
-            $lines[$i] = 'proxy.php?url=' . rawurlencode($abs) . '&raw=true';
+            // Segment or sub-playlist URL
+            $abs = absoluteUrl($t, $baseUrl);
+
+            if (isMediaSegment($abs) && isCorsOpen($abs)) {
+                // CORS-open segment → browser fetches directly, no proxy hop
+                // This bypasses the datacenter IP block entirely.
+                $lines[$i] = $abs;
+            } else {
+                // Sub-playlist or non-CORS segment → route through proxy
+                $lines[$i] = 'proxy.php?url=' . rawurlencode($abs) . '&raw=true';
+            }
         } else {
             // Tag line — rewrite URI="..." attributes (EXT-X-KEY, EXT-X-MAP, etc.)
+            // Encryption keys MUST go through proxy (they need auth headers)
             $lines[$i] = preg_replace_callback(
                 '/URI=["\']([^"\']+)["\']/i',
                 function (array $m) use ($baseUrl): string {
                     $abs = absoluteUrl($m[1], $baseUrl);
+                    // Keys always proxied — never direct
                     return 'URI="proxy.php?url=' . rawurlencode($abs) . '&raw=true"';
                 },
                 $t
@@ -129,12 +198,20 @@ function rewriteM3u8(string $body, string $baseUrl): string {
 
 /**
  * Build a cURL handle with spoofed browser headers.
- * $sourceHint: the logical origin site (Referer / Origin).
+ * $sourceHint : the logical origin site (Referer / Origin).
+ * $clientIp   : real visitor IP to forward (helps with some CF Worker auth checks).
  */
-function buildCurl(string $url, string $sourceHint = 'https://fifalive.click/'): \CurlHandle|false {
-    // Derive Origin from sourceHint
+function buildCurl(string $url, string $sourceHint = 'https://fifalive.click/', string $clientIp = ''): \CurlHandle|false {
     $p      = parse_url($sourceHint);
     $origin = ($p['scheme'] ?? 'https') . '://' . ($p['host'] ?? '');
+
+    $extraHdrs = [];
+    if ($clientIp !== '') {
+        $extraHdrs[] = 'X-Forwarded-For: '   . $clientIp;
+        $extraHdrs[] = 'CF-Connecting-IP: '  . $clientIp;
+        $extraHdrs[] = 'True-Client-IP: '    . $clientIp;
+        $extraHdrs[] = 'X-Real-IP: '         . $clientIp;
+    }
 
     $ch = curl_init($url);
     curl_setopt_array($ch, [
@@ -148,14 +225,14 @@ function buildCurl(string $url, string $sourceHint = 'https://fifalive.click/'):
         CURLOPT_SSL_VERIFYHOST => 0,
         CURLOPT_CONNECTTIMEOUT => 10,
         CURLOPT_TIMEOUT        => 30,
-        CURLOPT_ENCODING       => '',      // gzip / deflate / identity all accepted
-        CURLOPT_HTTPHEADER     => [
+        CURLOPT_ENCODING       => '',
+        CURLOPT_HTTPHEADER     => array_merge([
             'Accept: application/vnd.apple.mpegurl, application/x-mpegurl, video/MP2T, */*',
             'Accept-Language: en-US,en;q=0.9',
             'Referer: '  . $sourceHint,
             'Origin: '   . $origin,
             'Connection: keep-alive',
-        ],
+        ], $extraHdrs),
     ]);
     return $ch;
 }
@@ -202,10 +279,26 @@ function inferReferer(string $url): string {
 }
 
 // ── Fetch the target URL ─────────────────────────────────────────────────────
+// Forward the real visitor IP so CF Workers see a residential IP in the headers
+// (CF still checks the TCP connection IP, but some Workers also check these headers)
+$clientIp = $_SERVER['HTTP_CF_CONNECTING_IP']   // already forwarded by CF if site is proxied
+         ?? $_SERVER['HTTP_X_FORWARDED_FOR']
+         ?? $_SERVER['HTTP_X_REAL_IP']
+         ?? $_SERVER['REMOTE_ADDR']
+         ?? '';
+// Sanitise: take only the first IP from a comma-separated list
+if (str_contains($clientIp, ',')) {
+    $clientIp = trim(explode(',', $clientIp)[0]);
+}
+// Only pass if it looks like a real public IP (not loopback/private)
+if (!filter_var($clientIp, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+    $clientIp = '';
+}
+
 $referer  = inferReferer($targetUrl);
-$ch       = buildCurl($targetUrl, $referer);
+$ch       = buildCurl($targetUrl, $referer, $clientIp);
 $content  = curl_exec($ch);
-$httpCode = (int)  curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$httpCode = (int)    curl_getinfo($ch, CURLINFO_HTTP_CODE);
 $ctype    = (string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
 $curlErr  = curl_error($ch);
 $finalUrl = (string) curl_getinfo($ch, CURLINFO_EFFECTIVE_URL) ?: $targetUrl;
