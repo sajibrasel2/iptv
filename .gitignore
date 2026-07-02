@@ -2,5 +2,8 @@
 links_cache.json
 links_cache.json.tmp
 
+# Secrets file — contains real DB credentials and encryption key
+.env.php
+
 # XAMPP / local environment
 *.log
