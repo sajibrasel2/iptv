@@ -161,7 +161,8 @@ function buildCurl(string $url, string $sourceHint = 'https://fifalive.click/'):
 }
 
 /**
- * Pick a sensible Referer based on the target host.
+ * Pick the correct Referer/Origin for each upstream CDN/worker.
+ * Getting this wrong causes 403s on signed CDN URLs.
  */
 function inferReferer(string $url): string {
     $host = strtolower(parse_url($url, PHP_URL_HOST) ?? '');
@@ -172,6 +173,9 @@ function inferReferer(string $url): string {
         'nextgoal.workers.dev'  => 'https://fifalive.click/',
         'cinecdn.workers.dev'   => 'https://fifalive.click/',
         'smtahmidx.workers.dev' => 'https://fifalive.click/',
+        'rockstreamer.com'      => 'https://fifalive.click/',
+        'tiktokcdn.com'         => 'https://fifalive.click/',
+        'livecdn.'              => 'https://fifalive.click/',
         'ilovetoplay.xyz'       => 'https://ilovetoplay.xyz/',
         'eplayer.to'            => 'https://ilovetoplay.xyz/',
         'dlhd'                  => 'https://ilovetoplay.xyz/',
@@ -181,6 +185,7 @@ function inferReferer(string $url): string {
         if (str_contains($host, $needle)) return $referer;
     }
 
+    // Default: use fifalive as the referring page
     return 'https://fifalive.click/';
 }
 
@@ -205,13 +210,17 @@ if ($httpCode >= 400) {
     die('Upstream HTTP ' . $httpCode);
 }
 
-// ── Detect whether the response is M3U8 ────────────────────────────────────
+// ── Detect whether the response is M3U8 ─────────────────────────────────────
+// NOTE: Some CDNs (e.g. prod-cdn01-live.toffeelive.com) return M3U8 playlists
+// with Content-Type: text/plain instead of application/x-mpegurl.  We must
+// always check the body content, not just the Content-Type header.
 $looksLikeM3u8 =
-    stripos($ctype, 'mpegurl')             !== false ||
+    stripos($ctype, 'mpegurl')               !== false ||
     stripos($ctype, 'application/vnd.apple') !== false ||
-    // Body starts with M3U8 magic
+    // Body starts with the M3U8 magic tag (covers text/plain CDN responses)
     (is_string($content) && stripos(ltrim($content), '#EXTM3U') === 0) ||
-    // URL path ends with .m3u8 (after stripping query string)
+    (is_string($content) && stripos(ltrim($content), '#EXT-X-')  === 0) ||
+    // URL path contains .m3u8
     preg_match('/\.m3u8(\?|$)/i', parse_url($finalUrl, PHP_URL_PATH) ?? '');
 
 if ($looksLikeM3u8) {

@@ -68,6 +68,32 @@ function makeCurlHandle(string $url, array $options = []) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Sanitise a URL line from the source M3U8.
+//
+// The source site occasionally publishes malformed URLs, e.g.:
+//   https://live.smtahmidx.workers*dev/   (asterisk instead of dot)
+// filter_var(FILTER_VALIDATE_URL) rejects these silently, which drops the
+// server from the list entirely.  We fix common typos before validating.
+// ─────────────────────────────────────────────────────────────────────────────
+function sanitiseM3u8Url(string $raw): string {
+    $url = trim($raw);
+
+    // Replace * with . inside the hostname (e.g. workers*dev → workers.dev)
+    // Only replace * that appear between word characters in the host portion,
+    // not in the query string where they could be legitimate wildcards.
+    $url = preg_replace_callback(
+        '#^(https?://)([^/?#]+)#i',
+        fn($m) => $m[1] . str_replace('*', '.', $m[2]),
+        $url
+    );
+
+    // Strip any trailing whitespace or invisible chars
+    $url = rtrim($url);
+
+    return $url;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Parse a raw M3U8 text into server entries
 // ─────────────────────────────────────────────────────────────────────────────
 function parseM3u8(string $body, string $defaultGroup = 'Live'): array {
@@ -105,16 +131,19 @@ function parseM3u8(string $body, string $defaultGroup = 'Live'): array {
             continue;
         }
 
-        // URL line
-        if ($line[0] !== '#' && filter_var($line, FILTER_VALIDATE_URL)) {
-            $servers[] = [
-                'name'      => $pending['name']  ?? ('Server ' . (count($servers) + 1)),
-                'group'     => $pending['group'] ?? $defaultGroup,
-                'logo'      => $pending['logo']  ?? '',
-                'raw_url'   => $line,
-                'proxy_url' => 'proxy.php?url=' . rawurlencode($line) . '&raw=true',
-            ];
-            $pending = ['name' => null, 'group' => $defaultGroup, 'logo' => ''];
+        // URL line — sanitise first, then validate
+        if ($line[0] !== '#') {
+            $clean = sanitiseM3u8Url($line);
+            if (filter_var($clean, FILTER_VALIDATE_URL)) {
+                $servers[] = [
+                    'name'      => $pending['name']  ?? ('Server ' . (count($servers) + 1)),
+                    'group'     => $pending['group'] ?? $defaultGroup,
+                    'logo'      => $pending['logo']  ?? '',
+                    'raw_url'   => $clean,
+                    'proxy_url' => 'proxy.php?url=' . rawurlencode($clean) . '&raw=true',
+                ];
+                $pending = ['name' => null, 'group' => $defaultGroup, 'logo' => ''];
+            }
         }
     }
 
@@ -166,59 +195,41 @@ function fetchFifalive(): array {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SOURCE 2 — Cloudflare Worker Relays
-// These were extracted in the previous session as entries 2–4 in the fifalive
-// master M3U8. Try them independently since they may still return a valid stream
-// even when fifalive itself shows a paywall.
+// SOURCE 2 — Retry fifalive with VLC user-agent
+// Sometimes the CDN/Cloudflare serves the M3U8 only to non-browser UAs.
+// This is a cheap second attempt before we give up.
 // ─────────────────────────────────────────────────────────────────────────────
-function fetchWorkerRelays(): array {
-    $workers = [
-        ['name' => 'Worker Server 1', 'url' => 'https://live3.nextgoal.workers.dev/'],
-        ['name' => 'Worker Server 2', 'url' => 'https://fx.cinecdn.workers.dev/'],
-        ['name' => 'Worker Server 3', 'url' => 'https://live.smtahmidx.workers.dev/'],
-    ];
+function fetchFifaliveVlc(): array {
+    $ch = makeCurlHandle('https://fifalive.click/', [
+        'ua'      => 'VLC/3.0.21 LibVLC/3.0.21',
+        'referer' => 'https://fifalive.click/',
+        'origin'  => 'https://fifalive.click',
+        'accept'  => 'application/vnd.apple.mpegurl, application/x-mpegurl, */*',
+        'timeout' => 12,
+    ]);
+    $body  = curl_exec($ch);
+    $code  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $ctype = curl_getinfo($ch, CURLINFO_CONTENT_TYPE) ?: '';
+    $err   = curl_error($ch);
+    curl_close($ch);
 
-    $servers = [];
-    foreach ($workers as $w) {
-        $ch   = makeCurlHandle($w['url'], [
-            'referer' => 'https://fifalive.click/',
-            'origin'  => 'https://fifalive.click',
-            'timeout' => 10,
-        ]);
-        $body = curl_exec($ch);
-        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $ctype = curl_getinfo($ch, CURLINFO_CONTENT_TYPE) ?: '';
-        curl_close($ch);
-
-        if ($body === false || $code < 200 || $code >= 300) continue;
-
-        $isM3u8 = stripos($ctype, 'mpegurl') !== false
-               || stripos(ltrim($body), '#EXTM3U') === 0;
-
-        if ($isM3u8) {
-            // This worker returned a full M3U8 — parse its sub-entries
-            $sub = parseM3u8($body, 'Worker');
-            $servers = array_merge($servers, $sub);
-        } else {
-            // Worker returns a single stream URL — wrap it directly
-            $url = trim($body);
-            if (filter_var($url, FILTER_VALIDATE_URL)) {
-                $servers[] = [
-                    'name'      => $w['name'],
-                    'group'     => 'Worker',
-                    'logo'      => '',
-                    'raw_url'   => $w['url'],   // proxy the worker URL itself (it redirects)
-                    'proxy_url' => 'proxy.php?url=' . rawurlencode($w['url']) . '&raw=true',
-                ];
-            }
-        }
+    if ($body === false || $body === '' || $code < 200 || $code >= 300) {
+        return ['ok' => false, 'error' => "fifalive(VLC): HTTP $code / $err"];
     }
 
+    $isM3u8 = stripos($ctype, 'mpegurl') !== false
+           || stripos(ltrim($body), '#EXTM3U') === 0;
+
+    if (!$isM3u8) {
+        return ['ok' => false, 'error' => 'fifalive(VLC): not M3U8 — CT=' . $ctype];
+    }
+
+    $servers = parseM3u8($body, 'FIFA Live');
     if (empty($servers)) {
-        return ['ok' => false, 'error' => 'Worker relays: all offline or no valid streams'];
+        return ['ok' => false, 'error' => 'fifalive(VLC): no URLs found'];
     }
 
-    return ['ok' => true, 'source' => 'workers', 'servers' => $servers];
+    return ['ok' => true, 'source' => 'fifalive-vlc', 'servers' => $servers];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -227,15 +238,15 @@ function fetchWorkerRelays(): array {
 $errors  = [];
 $results = null;
 
-// Try Source 1
+// Try Source 1: standard browser UA
 $r1 = fetchFifalive();
 if ($r1['ok']) {
     $results = $r1;
 } else {
     $errors[] = $r1['error'];
 
-    // Try Source 2
-    $r2 = fetchWorkerRelays();
+    // Try Source 2: VLC UA (some CDN configs serve differently to media players)
+    $r2 = fetchFifaliveVlc();
     if ($r2['ok']) {
         $results = $r2;
     } else {
