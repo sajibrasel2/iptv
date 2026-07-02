@@ -1,703 +1,270 @@
 <?php
-session_start();
-require_once __DIR__.'/config.php';
+/**
+ * admin.php — Stream Sources Manager
+ *
+ * Password protected. Set ADMIN_PASS below before deploying.
+ * Usage: https://techandclick.site/iptv/admin.php
+ */
 
-// Authentication (same as original admin.php)
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
-    if ($_POST['password'] === 'admin') {
-        $_SESSION['loggedin'] = true;
-    } else {
-        $error = "Invalid password!";
-    }
-}
-if (isset($_GET['logout'])) {
+define('ADMIN_PASS', 'tctv2026admin');  // ← change this
+
+session_start();
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+if ($_POST['logout'] ?? false) {
     session_destroy();
     header('Location: admin.php');
     exit;
 }
-$is_logged_in = isset($_SESSION['loggedin']) && $_SESSION['loggedin'] === true;
-
-$conn = null;
-if ($is_logged_in) {
-    try {
-        $dsn = "mysql:host=$servername;dbname=$dbname;charset=$charset";
-        $options = [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES => false,
-        ];
-        $conn = new PDO($dsn, $username, $password, $options);
-
-        $conn->exec("CREATE TABLE IF NOT EXISTS app_settings (
-            setting_key VARCHAR(100) PRIMARY KEY,
-            setting_value TEXT NOT NULL
-        )");
-
-        $defaultAutoplayUrl = '';
-        $stmt = $conn->prepare("SELECT setting_value FROM app_settings WHERE setting_key = 'default_autoplay_url' LIMIT 1");
-        $stmt->execute();
-        $defaultAutoplayUrl = trim($stmt->fetchColumn() ?: '');
-
-        // ---------- Existing Channel & Ad Handlers ----------
-        if (isset($_POST['add_channel'])) {
-            $stmt = $conn->prepare("INSERT INTO custom_channels (display_name, target_url) VALUES (:name, :url)");
-            $stmt->execute([':name' => $_POST['display_name'], ':url' => $_POST['target_url']]);
-        }
-        if (isset($_GET['delete_channel'])) {
-            $stmt = $conn->prepare("DELETE FROM custom_channels WHERE id = :id");
-            $stmt->execute([':id' => $_GET['delete_channel']]);
-            header('Location: admin.php');
-            exit;
-        }
-        if (isset($_POST['update_ads'])) {
-            $stmt = $conn->prepare("UPDATE ad_settings SET ad_name = :name, ad_url = :url WHERE id = :id");
-            foreach ($_POST['ad_id'] as $index => $id) {
-                $stmt->execute([
-                    ':name' => $_POST['ad_name'][$index],
-                    ':url'  => $_POST['ad_url'][$index],
-                    ':id'   => $id,
-                ]);
-            }
-
-            $defaultUrl = trim($_POST['default_autoplay_url'] ?? '');
-            $stmt = $conn->prepare("INSERT INTO app_settings (setting_key, setting_value) VALUES ('default_autoplay_url', :value)
-                ON DUPLICATE KEY UPDATE setting_value = :value");
-            $stmt->execute([':value' => $defaultUrl]);
-            $defaultAutoplayUrl = $defaultUrl;
-        }
-
-        // ---------- Prediction Admin Handlers ----------
-        if (isset($_POST['create_campaign'])) {
-            $campaignId = isset($_POST['campaign_id']) ? (int)$_POST['campaign_id'] : 0;
-            $raw = $_POST['match_time'];
-            $match_time = str_replace('T', ' ', $raw) . ':00';
-            if ($campaignId > 0) {
-                $stmt = $conn->prepare("UPDATE prediction_campaigns SET title=:title, team_a=:team_a, team_b=:team_b, match_time=:match_time, prize_image_url=:prize_image_url, fb_post_link=:fb_post_link WHERE id=:id");
-                $stmt->execute([
-                    ':title' => $_POST['title'],
-                    ':team_a' => $_POST['team_a'],
-                    ':team_b' => $_POST['team_b'],
-                    ':match_time' => $match_time,
-                    ':prize_image_url' => $_POST['prize_image_url'],
-                    ':fb_post_link' => $_POST['fb_post_link'],
-                    ':id' => $campaignId,
-                ]);
-            } else {
-                $stmt = $conn->prepare("INSERT INTO prediction_campaigns (title, team_a, team_b, match_time, prize_image_url, fb_post_link, status) VALUES (:title, :team_a, :team_b, :match_time, :prize_image_url, :fb_post_link, 'active')");
-                $stmt->execute([
-                    ':title' => $_POST['title'],
-                    ':team_a' => $_POST['team_a'],
-                    ':team_b' => $_POST['team_b'],
-                    ':match_time' => $match_time,
-                    ':prize_image_url' => $_POST['prize_image_url'],
-                    ':fb_post_link' => $_POST['fb_post_link'],
-                ]);
-                $newId = $conn->lastInsertId();
-                $conn->exec("UPDATE prediction_campaigns SET status='closed' WHERE id <> $newId AND status='active'");
-            }
-            header('Location: admin.php');
-            exit;
-        }
-        if (isset($_POST['toggle_status'])) {
-            $campaignId = (int)$_POST['campaign_id'];
-            $newStatus = $_POST['new_status'];
-            $conn->beginTransaction();
-            $stmt = $conn->prepare("UPDATE prediction_campaigns SET status=:status WHERE id=:id");
-            $stmt->execute([':status' => $newStatus, ':id' => $campaignId]);
-            if ($newStatus === 'active') {
-                $conn->exec("UPDATE prediction_campaigns SET status='closed' WHERE id <> $campaignId AND status='active'");
-            }
-            $conn->commit();
-        }
-        if (isset($_POST['delete_campaign'])) {
-            $campaignId = (int)$_POST['campaign_id'];
-            $conn->beginTransaction();
-            $stmt = $conn->prepare("DELETE FROM prediction_entries WHERE campaign_id = :cid");
-            $stmt->execute([':cid' => $campaignId]);
-            $stmt = $conn->prepare("DELETE FROM prediction_campaigns WHERE id = :id");
-            $stmt->execute([':id' => $campaignId]);
-            $conn->commit();
-            header('Location: admin.php');
-            exit;
-        }
-        $editCampaign = null;
-        if (isset($_GET['edit_campaign'])) {
-            $editId = (int)$_GET['edit_campaign'];
-            $stmt = $conn->prepare("SELECT * FROM prediction_campaigns WHERE id = :id LIMIT 1");
-            $stmt->execute([':id' => $editId]);
-            $editCampaign = $stmt->fetch();
-        }
-
-        $teams = [
-            'Argentina' => '🇦🇷 Argentina',
-            'Australia' => '🇦🇺 Australia',
-            'Austria' => '🇦🇹 Austria',
-            'Algeria' => '🇩🇿 Algeria',
-            'Belgium' => '🇧🇪 Belgium',
-            'Bangladesh' => '🇧🇩 Bangladesh',
-            'Brazil' => '🇧🇷 Brazil',
-            'Cameroon' => '🇨🇲 Cameroon',
-            'Canada' => '🇨🇦 Canada',
-            'Chile' => '🇨🇱 Chile',
-            'China' => '🇨🇳 China',
-            'Colombia' => '🇨🇴 Colombia',
-            'Costa Rica' => '🇨🇷 Costa Rica',
-            'Croatia' => '🇭🇷 Croatia',
-            'Czech Republic' => '🇨🇿 Czech Republic',
-            'Denmark' => '🇩🇰 Denmark',
-            'Ecuador' => '🇪🇨 Ecuador',
-            'Egypt' => '🇪🇬 Egypt',
-            'England' => '🇬🇧 England',
-            'France' => '🇫🇷 France',
-            'Germany' => '🇩🇪 Germany',
-            'Ghana' => '🇬🇭 Ghana',
-            'Greece' => '🇬🇷 Greece',
-            'Haiti' => '🇭🇹 Haiti',
-            'Hungary' => '🇭🇺 Hungary',
-            'India' => '🇮🇳 India',
-            'Iran' => '🇮🇷 Iran',
-            'Ireland' => '🇮🇪 Ireland',
-            'Italy' => '🇮🇹 Italy',
-            'Japan' => '🇯🇵 Japan',
-            'Jamaica' => '🇯🇲 Jamaica',
-            'Mexico' => '🇲🇽 Mexico',
-            'Mali' => '🇲🇱 Mali',
-            'Morocco' => '🇲🇦 Morocco',
-            'Netherlands' => '🇳🇱 Netherlands',
-            'New Zealand' => '🇳🇿 New Zealand',
-            'Nigeria' => '🇳🇬 Nigeria',
-            'Panama' => '🇵🇦 Panama',
-            'Peru' => '🇵🇪 Peru',
-            'Poland' => '🇵🇱 Poland',
-            'Portugal' => '🇵🇹 Portugal',
-            'Qatar' => '🇶🇦 Qatar',
-            'Romania' => '🇷🇴 Romania',
-            'Russia' => '🇷🇺 Russia',
-            'Saudi Arabia' => '🇸🇦 Saudi Arabia',
-            'Scotland' => '🏴 Scotland',
-            'Senegal' => '🇸🇳 Senegal',
-            'Spain' => '🇪🇸 Spain',
-            'Sweden' => '🇸🇪 Sweden',
-            'Switzerland' => '🇨🇭 Switzerland',
-            'South Africa' => '🇿🇦 South Africa',
-            'South Korea' => '🇰🇷 South Korea',
-            'Turkey' => '🇹🇷 Turkey',
-            'Tunisia' => '🇹🇳 Tunisia',
-            'UAE' => '🇦🇪 UAE',
-            'Ukraine' => '🇺🇦 Ukraine',
-            'United States' => '🇺🇸 United States',
-            'USA' => '🇺🇸 USA',
-            'Uruguay' => '🇺🇾 Uruguay',
-            'Uzbekistan' => '🇺🇿 Uzbekistan',
-            'Venezuela' => '🇻🇪 Venezuela',
-            'Wales' => '🏴 Wales',
-            'Ivory Coast' => '🇨🇮 Ivory Coast'
-        ];
-
-        function renderTeamOptions($selectedTeam = '') {
-            global $teams;
-            $options = '';
-            foreach ($teams as $value => $label) {
-                $options .= '<option value="'.htmlspecialchars($value).'"'.($selectedTeam === $value ? ' selected' : '').'>'.htmlspecialchars($label).'</option>';
-            }
-            return $options;
-        }
-
-        if (isset($_POST['draw_winners'])) {
-            $campaignId = (int)$_POST['campaign_id'];
-            $actualResult = $_POST['actual_result'] ?? '';
-            $actualGoalsA = isset($_POST['actual_goals_a']) ? (int)$_POST['actual_goals_a'] : null;
-            $actualGoalsB = isset($_POST['actual_goals_b']) ? (int)$_POST['actual_goals_b'] : null;
-            $stmt = $conn->prepare("SELECT status FROM prediction_campaigns WHERE id=:id");
-            $stmt->execute([':id' => $campaignId]);
-            $status = $stmt->fetchColumn();
-            if ($status !== 'closed') {
-                $drawError = "Campaign must be closed before drawing winners.";
-            } elseif ($actualResult === '' || !is_numeric($actualGoalsA) || !is_numeric($actualGoalsB)) {
-                $drawError = "Please provide the actual match result and exact score.";
-            } else {
-                $matchOutcome = $actualResult;
-                $stmt = $conn->prepare("SELECT id FROM prediction_entries WHERE campaign_id=:cid AND has_shared=1 AND is_winner=0 AND predicted_team=:predicted_team AND predicted_score_a=:score_a AND predicted_score_b=:score_b");
-                $stmt->execute([
-                    ':cid' => $campaignId,
-                    ':predicted_team' => $matchOutcome,
-                    ':score_a' => $actualGoalsA,
-                    ':score_b' => $actualGoalsB,
-                ]);
-                $eligible = $stmt->fetchAll(PDO::FETCH_COLUMN);
-                if (count($eligible) < 3) {
-                    $drawError = "Not enough eligible entries to draw 3 winners.";
-                } else {
-                    shuffle($eligible);
-                    $winners = array_slice($eligible, 0, 3);
-                    $in = implode(',', $winners);
-                    $conn->exec("UPDATE prediction_entries SET is_winner=1 WHERE id IN ($in)");
-                    $drawSuccess = "Winners drawn successfully.";
-                }
-            }
-        }
-    } catch (PDOException $e) {
-        die('Connection failed: ' . $e->getMessage());
+if ($_POST['pass'] ?? false) {
+    if ($_POST['pass'] === ADMIN_PASS) {
+        $_SESSION['auth'] = true;
+    } else {
+        $loginError = 'Wrong password.';
     }
 }
+if (!($_SESSION['auth'] ?? false)) {
+    echo '<!DOCTYPE html><html><head><title>Admin Login</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>body{font-family:sans-serif;background:#0a0e1a;color:#e2e8f0;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
+    form{background:#1e293b;padding:32px;border-radius:16px;min-width:300px;text-align:center}
+    h2{margin:0 0 20px;color:#3b82f6}
+    input[type=password]{width:100%;padding:10px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:14px;box-sizing:border-box}
+    button{margin-top:12px;width:100%;padding:10px;background:#3b82f6;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px}
+    .err{color:#f87171;margin-top:8px;font-size:13px}</style></head><body>
+    <form method="POST"><h2>🔒 Admin</h2>
+    <input type="password" name="pass" placeholder="Password" autofocus>
+    <button type="submit">Login</button>' .
+    (isset($loginError) ? '<div class="err">' . $loginError . '</div>' : '') .
+    '</form></body></html>';
+    exit;
+}
+
+require_once 'config.php';
+
+try {
+    $pdo = new PDO(
+        "mysql:host={$servername};dbname={$dbname};charset={$charset}",
+        $username, $password,
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
+    );
+} catch (PDOException $e) {
+    die('<p style="color:red;font-family:sans-serif;padding:20px">DB Error: ' . htmlspecialchars($e->getMessage()) . '</p>');
+}
+
+$msg = '';
+
+// ── Handle actions ────────────────────────────────────────────────────────────
+
+// Toggle status
+if (isset($_POST['toggle_id'])) {
+    $id  = (int) $_POST['toggle_id'];
+    $cur = $pdo->prepare("SELECT status FROM stream_sources WHERE id=?");
+    $cur->execute([$id]);
+    $row = $cur->fetch();
+    if ($row) {
+        $new = $row['status'] === 'active' ? 'disabled' : 'active';
+        $pdo->prepare("UPDATE stream_sources SET status=? WHERE id=?")->execute([$new, $id]);
+        $msg = "Server #$id set to <strong>$new</strong>.";
+    }
+}
+
+// Update priority
+if (isset($_POST['update_priority'])) {
+    $id  = (int) $_POST['priority_id'];
+    $pri = (int) $_POST['priority_val'];
+    $pdo->prepare("UPDATE stream_sources SET priority=? WHERE id=?")->execute([$pri, $id]);
+    $msg = "Priority updated for #$id.";
+}
+
+// Add new source
+if (isset($_POST['add_url'])) {
+    $name = trim($_POST['add_name'] ?? '');
+    $url  = trim($_POST['add_url']);
+    $grp  = trim($_POST['add_grp'] ?? 'Sports');
+    $pri  = (int) ($_POST['add_priority'] ?? 10);
+    if ($url && $name) {
+        // Encrypt the URL
+        function encryptUrl(string $url, string $keyB64): string {
+            $key = base64_decode($keyB64);
+            $iv  = random_bytes(16);
+            $enc = openssl_encrypt($url, 'AES-256-CBC', $key, OPENSSL_RAW_DATA, $iv);
+            return base64_encode($iv) . ':' . base64_encode($enc);
+        }
+        $enc = encryptUrl($url, $DB_ENCRYPT_KEY);
+        $pdo->prepare(
+            "INSERT INTO stream_sources (name, grp, raw_url_enc, status, priority, source_type)
+             VALUES (?, ?, ?, 'active', ?, 'manual')"
+        )->execute([$name, $grp, $enc, $pri]);
+        $msg = "Added: <strong>" . htmlspecialchars($name) . "</strong>.";
+    }
+}
+
+// Delete source
+if (isset($_POST['delete_id'])) {
+    $id = (int) $_POST['delete_id'];
+    $pdo->prepare("DELETE FROM stream_sources WHERE id=?")->execute([$id]);
+    $msg = "Deleted #$id.";
+}
+
+// Clear cache
+if (isset($_POST['clear_cache'])) {
+    $cacheFile = __DIR__ . '/links_cache.json';
+    if (file_exists($cacheFile)) {
+        unlink($cacheFile);
+        $msg = 'Cache cleared.';
+    } else {
+        $msg = 'No cache file found.';
+    }
+}
+
+// ── Fetch all sources ─────────────────────────────────────────────────────────
+$rows = $pdo->query(
+    "SELECT id, name, grp, status, priority, source_type, last_seen FROM stream_sources ORDER BY priority ASC"
+)->fetchAll();
+
+// Decrypt for display
+function decryptUrl(string $enc, string $keyB64): string {
+    $parts = explode(':', $enc, 2);
+    if (count($parts) !== 2) return '(decrypt error)';
+    $key  = base64_decode($keyB64);
+    $iv   = base64_decode($parts[0]);
+    $data = base64_decode($parts[1]);
+    $plain = openssl_decrypt($data, 'AES-256-CBC', $key, OPENSSL_RAW_DATA, $iv);
+    return $plain ?: '(decrypt error)';
+}
+
+$rowsWithUrls = array_map(function($r) use ($pdo, $DB_ENCRYPT_KEY) {
+    $enc = $pdo->prepare("SELECT raw_url_enc FROM stream_sources WHERE id=?");
+    $enc->execute([$r['id']]);
+    $e = $enc->fetch();
+    $r['url'] = $e ? decryptUrl($e['raw_url_enc'], $DB_ENCRYPT_KEY) : '';
+    return $r;
+}, $rows);
+
 ?>
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard - Live Sports Hub</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-    <script>
-        tailwind.config = { darkMode: 'class', theme: { extend: {} } };
-    </script>
-    <style>
-        .select2-container--default .select2-selection--single {
-            background-color: #0f172a;
-            border-color: #334155;
-            color: #f8fafc;
-            border-radius: 0.75rem;
-            min-height: 3rem;
-        }
-        .select2-container--default .select2-selection--single .select2-selection__rendered {
-            color: #f8fafc;
-        }
-        .select2-container--default .select2-selection--single .select2-selection__arrow b {
-            border-color: #f8fafc transparent transparent transparent;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stream Admin</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#0a0e1a;color:#e2e8f0;padding:16px;min-height:100vh}
+h1{color:#3b82f6;margin-bottom:16px;font-size:20px}
+.msg{background:#1e3a5f;border:1px solid #3b82f6;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px}
+.card{background:#1e293b;border-radius:12px;padding:16px;margin-bottom:12px;border:1px solid #334155}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.badge{padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700}
+.active{background:rgba(34,197,94,.2);color:#4ade80;border:1px solid rgba(34,197,94,.3)}
+.disabled{background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.2)}
+.name{font-weight:600;font-size:14px;flex:1}
+.url{font-size:11px;color:#64748b;word-break:break-all;margin-top:4px}
+.type{font-size:10px;color:#475569;background:#0f172a;padding:2px 6px;border-radius:4px}
+button{padding:6px 14px;border-radius:8px;border:none;cursor:pointer;font-size:12px;font-weight:600}
+.btn-toggle{background:#334155;color:#94a3b8}
+.btn-toggle:hover{background:#3b82f6;color:#fff}
+.btn-del{background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.2)}
+.btn-del:hover{background:#ef4444;color:#fff}
+.btn-green{background:rgba(34,197,94,.15);color:#4ade80;border:1px solid rgba(34,197,94,.2)}
+section{margin-bottom:20px}
+h2{color:#94a3b8;font-size:14px;margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em}
+input,select{background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:8px 10px;border-radius:8px;font-size:13px;width:100%}
+label{font-size:12px;color:#64748b;display:block;margin-bottom:4px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.full{grid-column:1/-1}
+.pri-form{display:flex;gap:6px;align-items:center}
+.pri-form input{width:60px}
+.logout{float:right;background:#334155;color:#94a3b8;font-size:12px;padding:6px 12px;border-radius:8px;border:none;cursor:pointer}
+</style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased p-6">
-<?php if (!$is_logged_in): ?>
-    <div class="max-w-md mx-auto bg-slate-800/50 p-8 rounded-2xl border border-white/5 shadow-2xl mt-20">
-        <h2 class="text-xl font-bold mb-6 text-center">Login Required</h2>
-        <?php if (isset($error)): ?>
-            <div class="bg-red-500/20 border border-red-500/50 text-red-400 px-4 py-3 rounded-lg mb-6 text-sm"><?php echo $error; ?></div>
-        <?php endif; ?>
-        <form method="POST" class="space-y-4">
-            <div>
-                <label class="block text-sm font-medium text-slate-400 mb-1">Password</label>
-                <input type="password" name="password" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500">
-            </div>
-            <button type="submit" name="login" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-3 rounded-xl transition-colors">Login</button>
-        </form>
+<body>
+<h1>📡 Stream Sources Admin
+  <form method="POST" style="display:inline">
+    <button name="logout" value="1" class="logout">Logout</button>
+  </form>
+</h1>
+
+<?php if ($msg): ?>
+<div class="msg"><?= $msg ?></div>
+<?php endif ?>
+
+<section>
+<h2>Stream Sources (<?= count($rows) ?>)</h2>
+
+<?php foreach ($rowsWithUrls as $r): ?>
+<div class="card">
+  <div class="row">
+    <span class="name"><?= htmlspecialchars($r['name']) ?></span>
+    <span class="badge <?= $r['status'] ?>"><?= $r['status'] ?></span>
+    <span class="type"><?= $r['source_type'] ?></span>
+    <span style="font-size:11px;color:#475569">P:<?= $r['priority'] ?></span>
+
+    <form method="POST" style="display:inline">
+      <input type="hidden" name="toggle_id" value="<?= $r['id'] ?>">
+      <button class="btn-toggle" type="submit">
+        <?= $r['status'] === 'active' ? '⏸ Disable' : '▶ Enable' ?>
+      </button>
+    </form>
+
+    <form method="POST" class="pri-form">
+      <input type="hidden" name="priority_id" value="<?= $r['id'] ?>">
+      <input type="number" name="priority_val" value="<?= $r['priority'] ?>" min="1" max="99">
+      <button name="update_priority" value="1" class="btn-toggle" type="submit">Set P</button>
+    </form>
+
+    <form method="POST" style="display:inline" onsubmit="return confirm('Delete this source?')">
+      <input type="hidden" name="delete_id" value="<?= $r['id'] ?>">
+      <button class="btn-del" type="submit">🗑</button>
+    </form>
+  </div>
+  <div class="url"><?= htmlspecialchars($r['url']) ?></div>
+  <?php if ($r['last_seen']): ?>
+  <div style="font-size:10px;color:#334155;margin-top:2px">Last seen: <?= $r['last_seen'] ?></div>
+  <?php endif ?>
+</div>
+<?php endforeach ?>
+</section>
+
+<section>
+<h2>Add New Source</h2>
+<div class="card">
+<form method="POST">
+  <div class="grid">
+    <div>
+      <label>Name</label>
+      <input type="text" name="add_name" placeholder="FIFA Live (Server X)" required>
     </div>
-<?php else: ?>
-    <header class="flex justify-between items-center py-6 mb-8 border-b border-slate-800">
-        <h1 class="text-2xl font-bold text-slate-300">Admin Dashboard</h1>
-        <a href="?logout=1" class="text-sm font-semibold text-slate-400 hover:text-white">Logout</a>
-    </header>
-    <!-- Tab Navigation -->
-    <div class="flex space-x-4 mb-6">
-        <button id="tabBtnChannels" class="px-4 py-2 rounded bg-indigo-600 text-white" onclick="showTab('channels')">Live Channels & Ads</button>
-        <button id="tabBtnPredictions" class="px-4 py-2 rounded bg-slate-700 text-slate-200" onclick="showTab('predictions')">Prediction Campaigns</button>
+    <div>
+      <label>Group</label>
+      <input type="text" name="add_grp" value="Sports">
     </div>
-
-    <!-- Channels Tab -->
-    <div id="tab-channels">
-        <div class="grid md:grid-cols-2 gap-8">
-            <!-- Ad Settings Section -->
-            <div class="bg-slate-800/50 p-6 rounded-2xl border border-white/5 shadow-xl h-fit">
-                <h2 class="text-xl font-bold mb-6 flex items-center space-x-2">
-                    <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    <span>Ad Monetization</span>
-                </h2>
-                <form method="POST" class="space-y-4">
-                    <div class="space-y-4 max-h-[350px] overflow-y-auto pr-2">
-                        <?php
-                        $stmt = $conn->query("SELECT * FROM ad_settings ORDER BY id ASC");
-                        while ($ad = $stmt->fetch(PDO::FETCH_ASSOC)):
-                        ?>
-                        <div class="p-4 bg-slate-900/50 rounded-xl border border-slate-700/50">
-                            <input type="hidden" name="ad_id[]" value="<?php echo $ad['id']; ?>">
-                            <div class="mb-3">
-                                <label class="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wider">Ad Label</label>
-                                <input type="text" name="ad_name[]" value="<?php echo htmlspecialchars($ad['ad_name']); ?>" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wider">Direct Link URL</label>
-                                <input type="url" name="ad_url[]" value="<?php echo htmlspecialchars($ad['ad_url']); ?>" placeholder="Leave empty to disable" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
-                            </div>
-                        </div>
-                        <?php endwhile; ?>
-                    </div>
-                    <div class="p-4 bg-slate-900/50 rounded-xl border border-slate-700/50">
-                        <label class="block text-xs font-semibold text-slate-400 mb-1 uppercase tracking-wider">Default Auto-Play URL</label>
-                        <input type="url" name="default_autoplay_url" value="<?php echo htmlspecialchars($defaultAutoplayUrl); ?>" placeholder="https://example.com/stream" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
-                        <p class="mt-2 text-xs text-slate-500">This URL will load automatically when users open the frontend. If empty, the fallback URL will be used.</p>
-                    </div>
-                    <button type="submit" name="update_ads" class="w-full bg-indigo-500/10 hover:bg-indigo-500 text-indigo-400 hover:text-white border border-indigo-500/30 hover:border-indigo-500 font-semibold py-3 px-4 rounded-xl transition-all mt-4">Save All Ad Links</button>
-                </form>
-            </div>
-            <!-- Channels Section -->
-            <div class="space-y-6">
-                <div class="bg-slate-800/50 p-6 rounded-2xl border border-white/5 shadow-xl">
-                    <h2 class="text-xl font-bold mb-6">Add New Channel</h2>
-                    <form method="POST" class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-400 mb-1">Display Name (Brand)</label>
-                            <input type="text" name="display_name" required placeholder="e.g. Sports 1 HD" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-400 mb-1">Target Stream URL</label>
-                            <input type="url" name="target_url" required placeholder="https://..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500">
-                        </div>
-                        <button type="submit" name="add_channel" class="w-full bg-pink-500/10 hover:bg-pink-500 text-pink-400 hover:text-white border border-pink-500/30 hover:border-pink-500 font-semibold py-3 px-4 rounded-xl transition-all">Add Channel</button>
-                    </form>
-                </div>
-                <div class="bg-slate-800/50 p-6 rounded-2xl border border-white/5 shadow-xl">
-                    <h2 class="text-xl font-bold mb-4">Manage Channels</h2>
-                    <div class="space-y-3">
-                        <?php
-                        $stmt = $conn->query("SELECT * FROM custom_channels ORDER BY id DESC");
-                        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)):
-                        ?>
-                        <div class="flex items-center justify-between p-4 bg-slate-900/50 rounded-xl border border-white/5">
-                            <div class="overflow-hidden">
-                                <h3 class="font-bold text-slate-200 truncate"><?php echo htmlspecialchars($row['display_name']); ?></h3>
-                                <p class="text-xs text-slate-500 truncate mt-1"><?php echo htmlspecialchars($row['target_url']); ?></p>
-                            </div>
-                            <a href="?delete_channel=<?php echo $row['id']; ?>" class="ml-4 p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg" onclick="return confirm('Delete this channel?');">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                            </a>
-                        </div>
-                        <?php endwhile; ?>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <div class="full">
+      <label>Stream URL</label>
+      <input type="url" name="add_url" placeholder="https://..." required>
     </div>
-
-    <!-- Predictions Tab -->
-    <div id="tab-predictions" class="hidden">
-        <section class="bg-slate-800/50 p-6 rounded-2xl mb-8">
-            <h2 class="text-xl font-bold mb-4">Create New Campaign</h2>
-            <form method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input type="hidden" name="campaign_id" id="edit_campaign_id" value="">
-                <input type="text" name="title" placeholder="Campaign Title" required class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white">
-                <select name="team_a" id="team_a" required class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white">
-                    <option value="" disabled selected>Team A</option>
-                    <option value="Argentina">🇦🇷 Argentina</option>
-                    <option value="Brazil">🇧🇷 Brazil</option>
-                    <option value="Uruguay">🇺🇾 Uruguay</option>
-                    <option value="Colombia">🇨🇴 Colombia</option>
-                    <option value="Ecuador">🇪🇨 Ecuador</option>
-                    <option value="Venezuela">🇻🇪 Venezuela</option>
-                    <option value="USA">🇺🇸 USA</option>
-                    <option value="Canada">🇨🇦 Canada</option>
-                    <option value="Mexico">🇲🇽 Mexico</option>
-                    <option value="Costa Rica">🇨🇷 Costa Rica</option>
-                    <option value="Panama">🇵🇦 Panama</option>
-                    <option value="Jamaica">🇯🇲 Jamaica</option>
-                    <option value="Haiti">🇭🇹 Haiti</option>
-                    <option value="France">🇫🇷 France</option>
-                    <option value="England">🇬🇧 England</option>
-                    <option value="Spain">🇪🇸 Spain</option>
-                    <option value="Germany">🇩🇪 Germany</option>
-                    <option value="Portugal">🇵🇹 Portugal</option>
-                    <option value="Italy">🇮🇹 Italy</option>
-                    <option value="Netherlands">🇳🇱 Netherlands</option>
-                    <option value="Croatia">🇭🇷 Croatia</option>
-                    <option value="Belgium">🇧🇪 Belgium</option>
-                    <option value="Switzerland">🇨🇭 Switzerland</option>
-                    <option value="Denmark">🇩🇰 Denmark</option>
-                    <option value="Serbia">🇷🇸 Serbia</option>
-                    <option value="Austria">🇦🇹 Austria</option>
-                    <option value="Ukraine">🇺🇦 Ukraine</option>
-                    <option value="Turkey">🇹🇷 Turkey</option>
-                    <option value="Poland">🇵🇱 Poland</option>
-                    <option value="Morocco">🇲🇦 Morocco</option>
-                    <option value="Senegal">🇸🇳 Senegal</option>
-                    <option value="Egypt">🇪🇬 Egypt</option>
-                    <option value="Algeria">🇩🇿 Algeria</option>
-                    <option value="Ivory Coast">🇨🇮 Ivory Coast</option>
-                    <option value="Nigeria">🇳🇬 Nigeria</option>
-                    <option value="Cameroon">🇨🇲 Cameroon</option>
-                    <option value="Mali">🇲🇱 Mali</option>
-                    <option value="Tunisia">🇹🇳 Tunisia</option>
-                    <option value="Japan">🇯🇵 Japan</option>
-                    <option value="South Korea">🇰🇷 South Korea</option>
-                    <option value="Iran">🇮🇷 Iran</option>
-                    <option value="Australia">🇦🇺 Australia</option>
-                    <option value="Saudi Arabia">🇸🇦 Saudi Arabia</option>
-                    <option value="Qatar">🇶🇦 Qatar</option>
-                    <option value="Uzbekistan">🇺🇿 Uzbekistan</option>
-                    <option value="UAE">🇦🇪 UAE</option>
-                    <option value="New Zealand">🇳🇿 New Zealand</option>
-                    <option value="Chile">🇨🇱 Chile</option>
-                    <option value="Peru">🇵🇪 Peru</option>
-                </select>
-                <select name="team_b" id="team_b" required class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white">
-                    <option value="" disabled selected>Team B</option>
-                    <option value="Argentina">🇦🇷 Argentina</option>
-                    <option value="Brazil">🇧🇷 Brazil</option>
-                    <option value="Uruguay">🇺🇾 Uruguay</option>
-                    <option value="Colombia">🇨🇴 Colombia</option>
-                    <option value="Ecuador">🇪🇨 Ecuador</option>
-                    <option value="Venezuela">🇻🇪 Venezuela</option>
-                    <option value="USA">🇺🇸 USA</option>
-                    <option value="Canada">🇨🇦 Canada</option>
-                    <option value="Mexico">🇲🇽 Mexico</option>
-                    <option value="Costa Rica">🇨🇷 Costa Rica</option>
-                    <option value="Panama">🇵🇦 Panama</option>
-                    <option value="Jamaica">🇯🇲 Jamaica</option>
-                    <option value="Haiti">🇭🇹 Haiti</option>
-                    <option value="France">🇫🇷 France</option>
-                    <option value="England">🇬🇧 England</option>
-                    <option value="Spain">🇪🇸 Spain</option>
-                    <option value="Germany">🇩🇪 Germany</option>
-                    <option value="Portugal">🇵🇹 Portugal</option>
-                    <option value="Italy">🇮🇹 Italy</option>
-                    <option value="Netherlands">🇳🇱 Netherlands</option>
-                    <option value="Croatia">🇭🇷 Croatia</option>
-                    <option value="Belgium">🇧🇪 Belgium</option>
-                    <option value="Switzerland">🇨🇭 Switzerland</option>
-                    <option value="Denmark">🇩🇰 Denmark</option>
-                    <option value="Serbia">🇷🇸 Serbia</option>
-                    <option value="Austria">🇦🇹 Austria</option>
-                    <option value="Ukraine">🇺🇦 Ukraine</option>
-                    <option value="Turkey">🇹🇷 Turkey</option>
-                    <option value="Poland">🇵🇱 Poland</option>
-                    <option value="Morocco">🇲🇦 Morocco</option>
-                    <option value="Senegal">🇸🇳 Senegal</option>
-                    <option value="Egypt">🇪🇬 Egypt</option>
-                    <option value="Algeria">🇩🇿 Algeria</option>
-                    <option value="Ivory Coast">🇨🇮 Ivory Coast</option>
-                    <option value="Nigeria">🇳🇬 Nigeria</option>
-                    <option value="Cameroon">🇨🇲 Cameroon</option>
-                    <option value="Mali">🇲🇱 Mali</option>
-                    <option value="Tunisia">🇹🇳 Tunisia</option>
-                    <option value="Japan">🇯🇵 Japan</option>
-                    <option value="South Korea">🇰🇷 South Korea</option>
-                    <option value="Iran">🇮🇷 Iran</option>
-                    <option value="Australia">🇦🇺 Australia</option>
-                    <option value="Saudi Arabia">🇸🇦 Saudi Arabia</option>
-                    <option value="Qatar">🇶🇦 Qatar</option>
-                    <option value="Uzbekistan">🇺🇿 Uzbekistan</option>
-                    <option value="UAE">🇦🇪 UAE</option>
-                    <option value="New Zealand">🇳🇿 New Zealand</option>
-                    <option value="Chile">🇨🇱 Chile</option>
-                    <option value="Peru">🇵🇪 Peru</option>
-                </select>
-                <input type="datetime-local" name="match_time" required class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white">
-                <input type="url" name="prize_image_url" placeholder="Prize Image URL" class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white">
-                <input type="url" name="fb_post_link" placeholder="Facebook Post Link" class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white">
-                <button type="submit" name="create_campaign" id="campaign-submit-btn" class="col-span-2 bg-green-500 hover:bg-green-600 text-white font-semibold py-2 rounded-xl transition-colors">Create Campaign</button>
-                <button type="button" id="campaign-cancel-btn" onclick="resetCampaignForm()" class="col-span-2 hidden bg-slate-600 hover:bg-slate-500 text-white font-semibold py-2 rounded-xl transition-colors">Cancel Edit</button>
-            </form>
-        </section>
-        <section class="overflow-x-auto mb-8">
-            <h2 class="text-xl font-bold mb-4">Existing Campaigns</h2>
-            <table class="min-w-full bg-slate-800/30 rounded-xl">
-                <thead class="bg-slate-700/50">
-                    <tr>
-                        <th class="px-4 py-2">ID</th>
-                        <th class="px-4 py-2">Title</th>
-                        <th class="px-4 py-2">Teams</th>
-                        <th class="px-4 py-2">Match Time</th>
-                        <th class="px-4 py-2">Status</th>
-                        <th class="px-4 py-2">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php
-                    $stmt = $conn->query("SELECT * FROM prediction_campaigns ORDER BY id DESC");
-                    while ($c = $stmt->fetch()):
-                    ?>
-                    <tr class="border-b border-slate-700/30">
-                        <td class="px-4 py-2 text-center"><?php echo $c['id']; ?></td>
-                        <td class="px-4 py-2"><?php echo htmlspecialchars($c['title']); ?></td>
-                        <td class="px-4 py-2"><?php echo htmlspecialchars($c['team_a']).' vs '.htmlspecialchars($c['team_b']); ?></td>
-                        <td class="px-4 py-2"><?php echo $c['match_time']; ?></td>
-                        <td class="px-4 py-2 text-center">
-                            <form method="POST" class="inline-block">
-                                <input type="hidden" name="campaign_id" value="<?php echo $c['id']; ?>">
-                                <input type="hidden" name="new_status" value="<?php echo $c['status'] === 'active' ? 'closed' : 'active'; ?>">
-                                <button type="submit" name="toggle_status" class="px-3 py-1 rounded <?php echo $c['status'] === 'active' ? 'bg-indigo-600' : 'bg-gray-600'; ?> text-white">
-                                    <?php echo ucfirst($c['status']); ?>
-                                </button>
-                            </form>
-                        </td>
-                        <td class="px-4 py-2 text-center space-x-2">
-                            <a href="?view_entries=<?php echo $c['id']; ?>" class="text-sm bg-slate-600 hover:bg-slate-500 text-white px-2 py-1 rounded">View Entries</a>
-                            <button type="button" onclick='editCampaign(<?php echo json_encode($c, JSON_HEX_APOS|JSON_HEX_QUOT); ?>)' class="text-sm bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded">Edit</button>
-                            <form method="POST" class="inline-block" onsubmit="return confirm('Are you sure you want to delete this campaign and all its predictions?');">
-                                <input type="hidden" name="campaign_id" value="<?php echo $c['id']; ?>">
-                                <button type="submit" name="delete_campaign" class="text-sm bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded">Delete</button>
-                            </form>
-                        </td>
-                    </tr>
-                    <?php endwhile; ?>
-                </tbody>
-            </table>
-        </section>
-        <?php if (isset($_GET['view_entries'])): ?>
-            <?php
-            $campaignId = (int)$_GET['view_entries'];
-            $campaign = $conn->query("SELECT * FROM prediction_campaigns WHERE id=$campaignId")->fetch();
-            ?>
-            <section class="bg-slate-800/50 p-6 rounded-2xl mb-8">
-                <h2 class="text-xl font-bold mb-4">Entries for: <?php echo htmlspecialchars($campaign['title']); ?></h2>
-                <table class="min-w-full bg-slate-700/30 rounded-xl">
-                    <thead class="bg-slate-600/50">
-                        <tr>
-                            <th class="px-3 py-2">#</th>
-                            <th class="px-3 py-2">Name</th>
-                            <th class="px-3 py-2">Phone</th>
-                            <th class="px-3 py-2">Country</th>
-                            <th class="px-3 py-2">District</th>
-                            <th class="px-3 py-2">Prediction</th>
-                            <th class="px-3 py-2">Score</th>
-                            <th class="px-3 py-2">Shared?</th>
-                            <th class="px-3 py-2">Winner</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php
-                        $stmt = $conn->prepare("SELECT * FROM prediction_entries WHERE campaign_id=:cid ORDER BY id DESC");
-                        $stmt->execute([':cid'=>$campaignId]);
-                        while ($e = $stmt->fetch()):
-                            $predictionLabel = $e['predicted_team'] === 'team_a' ? $campaign['team_a'] : ($e['predicted_team'] === 'team_b' ? $campaign['team_b'] : 'Draw');
-                        ?>
-                        <tr class="border-b border-slate-600/30">
-                            <td class="px-3 py-2 text-center"><?php echo $e['id']; ?></td>
-                            <td class="px-3 py-2"><?php echo htmlspecialchars($e['user_name']); ?></td>
-                            <td class="px-3 py-2"><?php echo htmlspecialchars($e['user_phone']); ?></td>
-                            <td class="px-3 py-2"><?php echo htmlspecialchars($e['country'] ?? ''); ?></td>
-                            <td class="px-3 py-2"><?php echo htmlspecialchars($e['district'] ?? ''); ?></td>
-                            <td class="px-3 py-2"><?php echo htmlspecialchars($predictionLabel); ?></td>
-                            <td class="px-3 py-2 text-center"><?php echo htmlspecialchars($e['predicted_score_a'] . ' - ' . $e['predicted_score_b']); ?></td>
-                            <td class="px-3 py-2 text-center"><?php echo $e['has_shared'] ? 'Yes' : 'No'; ?></td>
-                            <td class="px-3 py-2 text-center"><?php echo $e['is_winner'] ? '🏆' : '-'; ?></td>
-                        </tr>
-                        <?php endwhile; ?>
-                    </tbody>
-                </table>
-                <?php if ($campaign['status'] === 'closed'): ?>
-                    <form method="POST" class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <input type="hidden" name="campaign_id" value="<?php echo $campaignId; ?>">
-                        <div>
-                            <label class="block text-xs text-slate-400 uppercase tracking-wider mb-2">Actual Result</label>
-                            <select name="actual_result" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white">
-                                <option value="team_a"><?php echo htmlspecialchars($campaign['team_a']); ?> Win</option>
-                                <option value="draw">Draw</option>
-                                <option value="team_b"><?php echo htmlspecialchars($campaign['team_b']); ?> Win</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs text-slate-400 uppercase tracking-wider mb-2">Team A Goals</label>
-                            <input type="number" min="0" name="actual_goals_a" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white" placeholder="0">
-                        </div>
-                        <div>
-                            <label class="block text-xs text-slate-400 uppercase tracking-wider mb-2">Team B Goals</label>
-                            <input type="number" min="0" name="actual_goals_b" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white" placeholder="0">
-                        </div>
-                        <div class="col-span-1 md:col-span-3">
-                            <button type="submit" name="draw_winners" class="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-3 rounded-xl">Draw 3 Winners</button>
-                        </div>
-                    </form>
-                    <?php if (isset($drawError)) echo "<p class='mt-2 text-red-400'>".$drawError."</p>"; ?>
-                    <?php if (isset($drawSuccess)) echo "<p class='mt-2 text-green-400'>".$drawSuccess."</p>"; ?>
-                <?php endif; ?>
-            </section>
-        <?php endif; ?>
+    <div>
+      <label>Priority (1 = first)</label>
+      <input type="number" name="add_priority" value="10" min="1" max="99">
     </div>
+    <div style="display:flex;align-items:flex-end">
+      <button type="submit" class="btn-green" style="width:100%">+ Add Source</button>
+    </div>
+  </div>
+</form>
+</div>
+</section>
 
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJ+YOTui3gWkH+17Qb/l7ZtC7x3KSkdEXd6a0=" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-    <script>
-        function showTab(tab) {
-            const channelsDiv = document.getElementById('tab-channels');
-            const predictionsDiv = document.getElementById('tab-predictions');
-            const btnChannels = document.getElementById('tabBtnChannels');
-            const btnPredictions = document.getElementById('tabBtnPredictions');
-            if (tab === 'channels') {
-                channelsDiv.classList.remove('hidden');
-                predictionsDiv.classList.add('hidden');
-                btnChannels.classList.replace('bg-slate-700', 'bg-indigo-600');
-                btnChannels.classList.replace('text-slate-200', 'text-white');
-                btnPredictions.classList.replace('bg-indigo-600', 'bg-slate-700');
-                btnPredictions.classList.replace('text-white', 'text-slate-200');
-            } else {
-                predictionsDiv.classList.remove('hidden');
-                channelsDiv.classList.add('hidden');
-                btnPredictions.classList.replace('bg-slate-700', 'bg-indigo-600');
-                btnPredictions.classList.replace('text-slate-200', 'text-white');
-                btnChannels.classList.replace('bg-indigo-600', 'bg-slate-700');
-                btnChannels.classList.replace('text-white', 'text-slate-200');
-            }
-        }
-        function editCampaign(campaign) {
-            const formId = document.getElementById('edit_campaign_id');
-            const titleInput = document.querySelector('input[name="title"]');
-            const teamAInput = document.getElementById('team_a');
-            const teamBInput = document.getElementById('team_b');
-            const timeInput = document.querySelector('input[name="match_time"]');
-            const prizeInput = document.querySelector('input[name="prize_image_url"]');
-            const fbInput = document.querySelector('input[name="fb_post_link"]');
-            const submitBtn = document.getElementById('campaign-submit-btn');
-            const cancelBtn = document.getElementById('campaign-cancel-btn');
+<section>
+<h2>Cache</h2>
+<div class="card">
+  <form method="POST">
+    <button name="clear_cache" value="1" class="btn-del" type="submit">🗑 Clear links_cache.json</button>
+    <span style="font-size:12px;color:#475569;margin-left:10px">Forces stream.php to re-scrape fifalive.click on next load</span>
+  </form>
+</div>
+</section>
 
-            if (formId) formId.value = campaign.id || '';
-            if (titleInput) titleInput.value = campaign.title || '';
-            if (teamAInput) teamAInput.value = campaign.team_a || '';
-            if (teamBInput) teamBInput.value = campaign.team_b || '';
-            if (timeInput) timeInput.value = campaign.match_time ? campaign.match_time.replace(' ', 'T').slice(0, 16) : '';
-            if (prizeInput) prizeInput.value = campaign.prize_image_url || '';
-            if (fbInput) fbInput.value = campaign.fb_post_link || '';
-            if (submitBtn) submitBtn.textContent = 'Update Campaign';
-            if (cancelBtn) cancelBtn.classList.remove('hidden');
-            if (window.jQuery && window.jQuery.fn.select2) {
-                $(teamAInput).val(campaign.team_a).trigger('change');
-                $(teamBInput).val(campaign.team_b).trigger('change');
-            }
-            titleInput?.scrollIntoView({behavior: 'smooth', block: 'center'});
-        }
-
-        function resetCampaignForm() {
-            const formId = document.getElementById('edit_campaign_id');
-            const titleInput = document.querySelector('input[name="title"]');
-            const teamAInput = document.getElementById('team_a');
-            const teamBInput = document.getElementById('team_b');
-            const timeInput = document.querySelector('input[name="match_time"]');
-            const prizeInput = document.querySelector('input[name="prize_image_url"]');
-            const fbInput = document.querySelector('input[name="fb_post_link"]');
-            const submitBtn = document.getElementById('campaign-submit-btn');
-            const cancelBtn = document.getElementById('campaign-cancel-btn');
-
-            if (formId) formId.value = '';
-            if (titleInput) titleInput.value = '';
-            if (teamAInput) teamAInput.value = '';
-            if (teamBInput) teamBInput.value = '';
-            if (timeInput) timeInput.value = '';
-            if (prizeInput) prizeInput.value = '';
-            if (fbInput) fbInput.value = '';
-            if (submitBtn) submitBtn.textContent = 'Create Campaign';
-            if (cancelBtn) cancelBtn.classList.add('hidden');
-            if (window.jQuery && window.jQuery.fn.select2) {
-                $(teamAInput).val('').trigger('change');
-                $(teamBInput).val('').trigger('change');
-            }
-        }
-
-        document.addEventListener('DOMContentLoaded', function() {
-            if (window.jQuery && window.jQuery.fn.select2) {
-                $('#team_a').select2({
-                    width: '100%',
-                    placeholder: 'Select Team A',
-                    minimumResultsForSearch: 0,
-                    dropdownParent: $(document.body)
-                });
-                $('#team_b').select2({
-                    width: '100%',
-                    placeholder: 'Select Team B',
-                    minimumResultsForSearch: 0,
-                    dropdownParent: $(document.body)
-                });
-            }
-        });
-    </script>
-<?php endif; ?>
 </body>
 </html>

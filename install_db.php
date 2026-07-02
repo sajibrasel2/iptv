@@ -124,27 +124,43 @@ try {
                 'type'     => 'scraped',
             ],
             [
+                'name'     => 'FIFA Live (Server 4 — FoxFHD)',
+                'grp'      => 'Sports',
+                'url'      => 'https://fox-fhd.nextgoalfox.workers.dev/',
+                'status'   => 'active',
+                'priority' => 2,
+                'type'     => 'scraped',
+            ],
+            [
+                'name'     => 'FIFA Live (Server 5 — FX4K)',
+                'grp'      => 'Sports',
+                'url'      => 'https://fx-4k.fifalive-app.workers.dev/',
+                'status'   => 'active',
+                'priority' => 3,
+                'type'     => 'scraped',
+            ],
+            [
                 'name'     => 'FIFA Live (Server 2 — NextGoal)',
                 'grp'      => 'Sports',
                 'url'      => 'https://live3.nextgoal.workers.dev/',
                 'status'   => 'disabled',   // rate-limited 429
-                'priority' => 2,
+                'priority' => 4,
                 'type'     => 'scraped',
             ],
             [
                 'name'     => 'FIFA Live (Server 3 — SmtAhmidx)',
                 'grp'      => 'Sports',
                 'url'      => 'https://live.smtahmidx.workers.dev/',
-                'status'   => 'disabled',   // hard 403
-                'priority' => 3,
+                'status'   => 'disabled',   // empty body from cPanel IP
+                'priority' => 5,
                 'type'     => 'scraped',
             ],
             [
                 'name'     => 'FIFA Live (Server 1 — ToffeeLive)',
                 'grp'      => 'Sports',
                 'url'      => 'https://prod-cdn01-live.toffeelive.com/',
-                'status'   => 'disabled',   // DNS failure
-                'priority' => 4,
+                'status'   => 'disabled',   // DNS failure from cPanel
+                'priority' => 6,
                 'type'     => 'scraped',
             ],
         ];
