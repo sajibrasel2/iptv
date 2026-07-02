@@ -38,12 +38,26 @@ $FALLBACK = [
 ];
 
 // ── Hosts that cannot be proxied OR directly fetched by browser ───────────────
-// These are skipped entirely to prevent auto-switching to a dead server.
+// Confirmed dead via live network audit — skip entirely so the player never
+// wastes time connecting to them and auto-switching through failures.
+//
+//   toffeelive.com     → cPanel datacenter IP TCP-blocked (502), no CORS headers
+//   nextgoal.workers   → HTTP 429 rate-limited (Cloudflare error 1027)
+//   smtahmidx.workers  → HTTP 403 "only allowed on fifalive.click"
+//
+// Only fx.cinecdn.workers.dev (Server 4) works reliably via proxy.
 $SKIP_HOSTS = [
+    // ToffeeLive — IP blocked + no CORS
     'toffeelive.com',
     'prod-cdn01-live.toffeelive.com',
     'prod-cdn02-live.toffeelive.com',
     'prod-cdn03-live.toffeelive.com',
+    // nextgoal — rate limited 429
+    'live3.nextgoal.workers.dev',
+    'nextgoal.workers.dev',
+    // smtahmidx — hard 403 origin block
+    'live.smtahmidx.workers.dev',
+    'smtahmidx.workers.dev',
 ];
 
 function shouldSkip(string $url, array $skipHosts): bool {

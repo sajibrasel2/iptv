@@ -567,15 +567,27 @@ const TCTV = window.TCTV = {
     if(srv.is_fallback)this.setWarning('⚠ All live sources failed. Showing test stream.');
     else this.hideWarning();
 
-    // Route all servers through proxy.php — it handles Referer spoofing
-    // and 302-redirects TikTok CDN segments directly to the browser.
+    // Route all servers through proxy.php — it handles Referer spoofing.
     const streamUrl = srv.proxy_url;
 
     if(Hls.isSupported()){
+      // ── Recovery counters — reset per-server-load ────────────────────────
+      let networkRecoveries = 0;
+      let mediaRecoveries   = 0;
+      const MAX_NETWORK_RECOVERIES = 2;
+      const MAX_MEDIA_RECOVERIES   = 2;
+
       this.hls=new Hls({
-        enableWorker:true,lowLatencyMode:true,maxMaxBufferLength:60,
-        fragLoadingMaxRetry:6,manifestLoadingMaxRetry:6,levelLoadingMaxRetry:6,
-        fragLoadingRetryDelay:1000,manifestLoadingRetryDelay:1000,
+        enableWorker:true,
+        lowLatencyMode:true,
+        maxMaxBufferLength:60,
+        // Retry settings: each retry waits fragLoadingRetryDelay ms
+        fragLoadingMaxRetry:4,
+        manifestLoadingMaxRetry:3,
+        levelLoadingMaxRetry:3,
+        fragLoadingRetryDelay:1500,
+        manifestLoadingRetryDelay:1500,
+        levelLoadingRetryDelay:1500,
       });
       this.hls.loadSource(streamUrl);
       this.hls.attachMedia(this.player);
@@ -583,31 +595,57 @@ const TCTV = window.TCTV = {
       this.hls.on(Hls.Events.MANIFEST_PARSED,()=>{
         this.hideSpinner();
         this.player.play().catch(e=>{
-          if(e.name==='NotAllowedError')this.player.muted=false;
+          // Autoplay blocked — unmute and retry (browser policy)
+          if(e.name==='NotAllowedError'){
+            this.player.muted=true;
+            this.player.play().catch(()=>{});
+          }
         });
         this.setBadge(srv.name);
       });
 
       this.hls.on(Hls.Events.ERROR,(ev,data)=>{
-        if(!data.fatal)return;
-        console.error('[HLS fatal]',data.type,data.details);
-        switch(data.type){
-          case Hls.ErrorTypes.NETWORK_ERROR:
+        if(!data.fatal) return; // non-fatal: HLS.js handles internally
+
+        console.error('[HLS fatal]',data.type,data.details,'server:',srv.name);
+
+        if(data.type===Hls.ErrorTypes.NETWORK_ERROR){
+          // NETWORK_ERROR: retry up to MAX_NETWORK_RECOVERIES times,
+          // then give up and auto-switch. Never call startLoad() forever.
+          if(networkRecoveries < MAX_NETWORK_RECOVERIES){
+            networkRecoveries++;
+            console.warn('[HLS] network recovery attempt',networkRecoveries);
             this.hls.startLoad();
-            break;
-          case Hls.ErrorTypes.MEDIA_ERROR:
-            this.hls.recoverMediaError();
-            break;
-          default:
+          } else {
+            // Exhausted retries — this server is dead, move on
             this.destroyHls();
             this.failedServers.add(idx);
             this.markFailed(idx);
-            this.showError(srv.name+' failed','Auto-switching to next server...',true);
+            this.showError(srv.name+' unavailable','Trying next server…',true);
+          }
+        } else if(data.type===Hls.ErrorTypes.MEDIA_ERROR){
+          if(mediaRecoveries < MAX_MEDIA_RECOVERIES){
+            mediaRecoveries++;
+            console.warn('[HLS] media recovery attempt',mediaRecoveries);
+            this.hls.recoverMediaError();
+          } else {
+            this.destroyHls();
+            this.failedServers.add(idx);
+            this.markFailed(idx);
+            this.showError(srv.name+' media error','Trying next server…',true);
+          }
+        } else {
+          // OTHER fatal (e.g. KEY_SYSTEM_ERROR, BUFFER_ERROR) — switch immediately
+          this.destroyHls();
+          this.failedServers.add(idx);
+          this.markFailed(idx);
+          this.showError(srv.name+' failed','Trying next server…',true);
         }
       });
+
     }else if(this.player.canPlayType('application/vnd.apple.mpegurl')){
       // Native HLS (iOS Safari)
-      this.player.src=srv.proxy_url;
+      this.player.src=streamUrl;
       this.player.addEventListener('loadedmetadata',()=>{
         this.hideSpinner();
         this.player.play().catch(e=>{});

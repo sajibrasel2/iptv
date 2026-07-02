@@ -69,15 +69,11 @@ if (preg_match('/^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.)/', $tar
     http_response_code(403); die('Private address blocked.');
 }
 
-// ── TikTok CDN redirect ───────────────────────────────────────────────────────
-// TikTok CDN segments (served as .image URLs from tiktokcdn.com) cannot be
-// proxied from datacenter IPs — they get blocked/timeout.
-// BUT: browsers can fetch them directly (no browser CORS restriction on media CDNs).
-// So: issue a 302 redirect and let the browser grab them directly.
-if (str_contains($targetHost, 'tiktokcdn.com') || str_contains($targetHost, 'tiktok.com')) {
-    header('Location: ' . $targetUrl, true, 302);
-    exit;
-}
+// NOTE: TikTok CDN segments (.image URLs from tiktokcdn.com) are proxied
+// server-side like everything else. A 302 redirect cannot be used here because
+// HLS.js fetches segments via XHR/fetch with mode:cors — the browser would
+// follow the redirect to tiktokcdn.com, which has no CORS headers, and block
+// the response. Full server-side proxying is the only viable path.
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -142,6 +138,10 @@ function inferReferer(string $url): string {
         'cinecdn.workers.dev'        => 'https://fifalive.click/',
         'nextgoal.workers.dev'       => 'https://fifalive.click/',
         'smtahmidx.workers.dev'      => 'https://fifalive.click/',
+        // TikTok CDN segments — served via fx.cinecdn.workers.dev
+        // Must use the Worker URL as referer, not fifalive directly
+        'tiktokcdn.com'              => 'https://fx.cinecdn.workers.dev/',
+        'tiktok.com'                 => 'https://fx.cinecdn.workers.dev/',
         // ToffeeLive CDN (kept for completeness; blocked by IP regardless)
         'prod-cdn01-live.toffeelive' => 'https://toffeelive.com/',
         'toffeelive.com'             => 'https://toffeelive.com/',
