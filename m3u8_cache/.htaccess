@@ -1,0 +1,7 @@
+AddType application/vnd.apple.mpegurl .m3u8
+AddType video/MP2T .ts
+
+Header always set Access-Control-Allow-Origin "*"
+Header always set Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
+Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+Header always set Pragma "no-cache"

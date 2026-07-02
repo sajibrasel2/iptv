@@ -140,10 +140,38 @@ function fetchAndCacheWorkerM3u8(string $workerUrl): ?string {
         mkdir($cacheDir, 0755, true);
     }
 
-    // Write M3U8 as-is — TikTok segment URLs stay direct (browser fetches them)
-    file_put_contents($cachePath, $body, LOCK_EX);
+    // Write M3U8 with segment URLs proxied through proxy.php
+    // TikTok URLs → proxy.php will 302-redirect them to browser
+    // Other segment URLs → proxy.php will forward them server-side
+    $rewritten = rewriteCachedM3u8($body, $workerUrl);
+    file_put_contents($cachePath, $rewritten, LOCK_EX);
 
     return $cacheUrl;
+}
+
+/**
+ * Rewrite M3U8 segment URLs to go through proxy.php.
+ * proxy.php will 302-redirect tiktokcdn.com URLs to the browser directly.
+ */
+function rewriteCachedM3u8(string $body, string $baseUrl): string {
+    $lines = preg_split('~\r?\n~', $body);
+    foreach ($lines as $i => $line) {
+        $t = trim($line);
+        if ($t === '' || $t[0] === '#') continue;
+        // Absolute or relative URL — make absolute then proxy it
+        if (preg_match('~^https?://~i', $t)) {
+            $lines[$i] = '../proxy.php?url=' . rawurlencode($t) . '&raw=true';
+        } else {
+            $p      = parse_url($baseUrl);
+            $scheme = $p['scheme'] ?? 'https';
+            $host   = $p['host']   ?? '';
+            $path   = $p['path']   ?? '/';
+            $dir    = substr($path, -1) === '/' ? $path : rtrim(dirname($path), '/') . '/';
+            $abs    = $scheme . '://' . $host . $dir . ltrim($t, './');
+            $lines[$i] = '../proxy.php?url=' . rawurlencode($abs) . '&raw=true';
+        }
+    }
+    return implode("\n", $lines);
 }
 
 function isM3u8(string $body, string $ctype): bool {
