@@ -202,7 +202,7 @@ if ($clientIp !== '') {
 $ch = curl_init($targetUrl);
 curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_FOLLOWLOCATION => true,
+    CURLOPT_FOLLOWLOCATION => false,   // handle redirects manually to preserve Origin header
     CURLOPT_MAXREDIRS      => 5,
     // Full iOS 17 Safari UA — must match the Accept headers above
     CURLOPT_USERAGENT      => 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) '
@@ -217,13 +217,60 @@ curl_setopt_array($ch, [
     CURLOPT_TIMEOUT        => 45,                  // generous for large TS segments
     CURLOPT_ENCODING       => '',                  // auto-decompress gzip / br
     CURLOPT_HTTPHEADER     => $headers,
+    CURLOPT_HEADER         => true,                // include response headers for redirect detection
 ]);
 
-$content  = curl_exec($ch);
-$httpCode = (int)    curl_getinfo($ch, CURLINFO_HTTP_CODE);
-$ctype    = (string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
-$curlErr  = curl_error($ch);
-$finalUrl = (string) curl_getinfo($ch, CURLINFO_EFFECTIVE_URL) ?: $targetUrl;
+// ── Manual redirect loop (preserves Origin/Referer on every hop) ──────────────
+$currentUrl = $targetUrl;
+$content    = '';
+$httpCode   = 0;
+$ctype      = '';
+$finalUrl   = $targetUrl;
+$curlErr    = '';
+$hops       = 0;
+
+while ($hops < 6) {
+    curl_setopt($ch, CURLOPT_URL, $currentUrl);
+    // Update Referer/Origin for this hop based on current URL
+    $hopReferer = inferReferer($currentUrl);
+    $hopParsed  = parse_url($hopReferer);
+    $hopOrigin  = ($hopParsed['scheme'] ?? 'https') . '://' . ($hopParsed['host'] ?? '');
+    $hopHeaders = array_filter($headers, fn($h) =>
+        !str_starts_with($h, 'Referer:') && !str_starts_with($h, 'Origin:')
+    );
+    $hopHeaders[] = 'Referer: ' . $hopReferer;
+    $hopHeaders[] = 'Origin: '  . $hopOrigin;
+    curl_setopt($ch, CURLOPT_HTTPHEADER, array_values($hopHeaders));
+    curl_setopt($ch, CURLOPT_REFERER, $hopReferer);
+
+    $raw      = curl_exec($ch);
+    $httpCode = (int)    curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $hs       = (int)    curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+    $ctype    = (string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+    $curlErr  = curl_error($ch);
+    $finalUrl = $currentUrl;
+
+    if ($raw === false) {
+        $content = false;
+        break;
+    }
+
+    $rawHeaders = substr($raw, 0, $hs);
+    $content    = substr($raw, $hs);
+
+    // Follow 3xx redirects manually
+    if ($httpCode >= 300 && $httpCode < 400) {
+        if (preg_match('~^location:\s*(.+)$~im', $rawHeaders, $m)) {
+            $location   = trim($m[1]);
+            $currentUrl = preg_match('~^https?://~i', $location)
+                ? $location
+                : absoluteUrl($location, $currentUrl);
+            $hops++;
+            continue;
+        }
+    }
+    break;   // not a redirect — done
+}
 curl_close($ch);
 
 // ── Error responses ───────────────────────────────────────────────────────────
