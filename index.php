@@ -29,9 +29,11 @@ $customChannelsJson = json_encode(array_map(fn($ch) => [
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#0a0e1a">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Tech &amp; Click TV — Live Sports</title>
+<link rel="icon" href="icon-192.png" type="image/png">
 <link rel="manifest" href="manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js"></script>
 <style>
@@ -596,10 +598,13 @@ const TCTV = window.TCTV = {
   destroyHls(){if(this.hls){this.hls.destroy();this.hls=null}},
 
   // ── Build an HLS instance for a given URL ──────────────────────────────────
-  // onFatal(data) is called when all recovery attempts are exhausted.
+  // onFatal() is called when all recovery attempts are exhausted.
   _makeHls(streamUrl, onFatal){
     let netRetries = 0, mediaRetries = 0;
-    const MAX_NET = 2, MAX_MEDIA = 2;
+    // For proxy attempts: 0 net retries so a 403/502 switches immediately to raw_url.
+    // For direct raw attempts: 1 retry gives the CDN a second chance.
+    const MAX_NET   = streamUrl.startsWith('proxy.php') ? 0 : 1;
+    const MAX_MEDIA = 2;
 
     const hls = new Hls({
       enableWorker:true,
@@ -611,17 +616,8 @@ const TCTV = window.TCTV = {
       fragLoadingRetryDelay:1500,
       manifestLoadingRetryDelay:1500,
       levelLoadingRetryDelay:1500,
-      // Inject Origin: fifalive.click on every XHR to CDN / Worker domains.
-      // This lets the browser's residential IP pass the origin check that
-      // blocks our cPanel datacenter IP on proxy.php.
-      xhrSetup(xhr, url){
-        try{
-          const h = new URL(url).hostname;
-          if(h.endsWith('workers.dev') || h.includes('tiktokcdn.com') || h.includes('toffeelive.com')){
-            xhr.setRequestHeader('Origin', 'https://fifalive.click');
-          }
-        }catch(e){}
-      },
+      // NOTE: xhrSetup cannot inject Origin — browsers block it as a forbidden
+      // header. Referer spoofing is handled server-side in proxy.php instead.
     });
     hls.loadSource(streamUrl);
     hls.attachMedia(this.player);
