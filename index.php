@@ -102,6 +102,24 @@ $initialPlayerSrc = $autoplayUrl;
             visibility: hidden !important;
             opacity: 0 !important;
         }
+        #top-overlay-mask,
+        #bottom-right-overlay-mask {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+        }
+        .iframe-container {
+            position: relative;
+            width: 100%;
+            background-color: #000;
+        }
+        @media (min-width: 768px) {
+            .iframe-container {
+                aspect-ratio: auto !important;
+                height: calc(100vh - 280px) !important;
+            }
+        }
         @keyframes shimmer { 100% { transform: translateX(100%); } }
     </style>
 </head>
@@ -111,7 +129,7 @@ $initialPlayerSrc = $autoplayUrl;
         <div class="absolute inset-0 bg-black/50"></div>
     </div>
 
-    <div class="w-full max-w-md bg-slate-900/80 h-[100dvh] flex flex-col relative z-10 shadow-[0_0_40px_rgba(0,0,0,0.5)] overflow-hidden sm:border-x sm:border-slate-800 backdrop-blur-xl" style="overscroll-behavior-y: none;">
+    <div class="w-full max-w-md md:max-w-none bg-slate-900/80 h-[100dvh] flex flex-col relative z-10 shadow-[0_0_40px_rgba(0,0,0,0.5)] overflow-hidden sm:border-x sm:border-slate-800 backdrop-blur-xl" style="overscroll-behavior-y: none;">
         
         <header class="sticky top-0 z-50 glass-panel bg-slate-900/80 border-b border-white/5 px-6 py-4 flex items-center justify-center">
             <div class="px-8 py-2 rounded-full" style="background: radial-gradient(circle, rgba(165, 243, 252, 0.15) 0%, rgba(15, 23, 42, 0) 70%);">
@@ -122,10 +140,10 @@ $initialPlayerSrc = $autoplayUrl;
 
         <main class="flex-1 overflow-y-auto p-4 pb-8 relative" style="-webkit-overflow-scrolling: touch;">
             <section class="rounded-[32px] border border-slate-800 bg-slate-950/95 shadow-[0_30px_80px_rgba(0,0,0,0.45)] overflow-hidden">
-                <div class="relative aspect-[16/9] bg-black">
+                <div class="iframe-container relative aspect-[16/9] bg-black">
                     <div class="relative w-full h-full overflow-hidden rounded-[28px] shadow-[0_35px_120px_rgba(0,0,0,0.55)]">
-                        <div class="absolute inset-x-0 top-0 h-16 z-[1000] pointer-events-none bg-black/95"></div>
-                        <div class="absolute bottom-0 right-0 w-[240px] h-[140px] z-[1000] pointer-events-none bg-black/95"></div>
+                        <div id="top-overlay-mask" class="absolute inset-x-0 top-0 h-16 z-[1000] pointer-events-none bg-black/95"></div>
+                        <div id="bottom-right-overlay-mask" class="absolute bottom-0 right-0 w-[240px] h-[140px] z-[1000] pointer-events-none bg-black/95"></div>
                         <iframe id="main-player" src="<?= htmlspecialchars($initialPlayerSrc, ENT_QUOTES); ?>" sandbox="allow-scripts allow-popups allow-forms allow-presentation" allowfullscreen class="relative z-[2] w-full h-full border-0 bg-black"></iframe>
                     </div>
                 </div>
