@@ -186,10 +186,9 @@ $headers = [
     'Cache-Control: no-cache',
     'Pragma: no-cache',
     'Connection: keep-alive',
-    // Sec-Fetch headers make the request look like a real browser CORS request
-    'Sec-Fetch-Dest: empty',
-    'Sec-Fetch-Mode: cors',
-    'Sec-Fetch-Site: cross-site',
+    // NOTE: Sec-Fetch-* headers are intentionally omitted.
+    // Cloudflare Workers detect them as datacenter bot traffic when sent
+    // from a server-side cURL request (browsers auto-generate these).
 ];
 if ($clientIp !== '') {
     $headers[] = 'X-Forwarded-For: '  . $clientIp;
@@ -199,78 +198,31 @@ if ($clientIp !== '') {
 }
 
 // ── cURL fetch ────────────────────────────────────────────────────────────────
+// Simple FOLLOWLOCATION — proxytest.php confirmed cinecdn returns direct 200,
+// no redirect chain. Manual redirect loop was unnecessary and introduced bugs.
 $ch = curl_init($targetUrl);
 curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_FOLLOWLOCATION => false,   // handle redirects manually to preserve Origin header
+    CURLOPT_FOLLOWLOCATION => true,
     CURLOPT_MAXREDIRS      => 5,
-    // Full iOS 17 Safari UA — must match the Accept headers above
     CURLOPT_USERAGENT      => 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) '
                             . 'AppleWebKit/605.1.15 (KHTML, like Gecko) '
                             . 'Version/17.5 Mobile/15E148 Safari/604.1',
-    // Set Referer at cURL level too — persists correctly through redirects
     CURLOPT_REFERER        => $referer,
     CURLOPT_SSL_VERIFYPEER => false,
     CURLOPT_SSL_VERIFYHOST => 0,
-    CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4,  // IPv4 only — broken IPv6 on some cPanel hosts
+    CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4,
     CURLOPT_CONNECTTIMEOUT => 15,
-    CURLOPT_TIMEOUT        => 45,                  // generous for large TS segments
-    CURLOPT_ENCODING       => '',                  // auto-decompress gzip / br
+    CURLOPT_TIMEOUT        => 45,
+    CURLOPT_ENCODING       => '',
     CURLOPT_HTTPHEADER     => $headers,
-    CURLOPT_HEADER         => true,                // include response headers for redirect detection
 ]);
 
-// ── Manual redirect loop (preserves Origin/Referer on every hop) ──────────────
-$currentUrl = $targetUrl;
-$content    = '';
-$httpCode   = 0;
-$ctype      = '';
-$finalUrl   = $targetUrl;
-$curlErr    = '';
-$hops       = 0;
-
-while ($hops < 6) {
-    curl_setopt($ch, CURLOPT_URL, $currentUrl);
-    // Update Referer/Origin for this hop based on current URL
-    $hopReferer = inferReferer($currentUrl);
-    $hopParsed  = parse_url($hopReferer);
-    $hopOrigin  = ($hopParsed['scheme'] ?? 'https') . '://' . ($hopParsed['host'] ?? '');
-    $hopHeaders = array_filter($headers, fn($h) =>
-        !str_starts_with($h, 'Referer:') && !str_starts_with($h, 'Origin:')
-    );
-    $hopHeaders[] = 'Referer: ' . $hopReferer;
-    $hopHeaders[] = 'Origin: '  . $hopOrigin;
-    curl_setopt($ch, CURLOPT_HTTPHEADER, array_values($hopHeaders));
-    curl_setopt($ch, CURLOPT_REFERER, $hopReferer);
-
-    $raw      = curl_exec($ch);
-    $httpCode = (int)    curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $hs       = (int)    curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-    $ctype    = (string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
-    $curlErr  = curl_error($ch);
-    $finalUrl = $currentUrl;
-
-    if ($raw === false) {
-        $content = false;
-        break;
-    }
-
-    $rawHeaders = substr($raw, 0, $hs);
-    $content    = substr($raw, $hs);
-
-    // Follow 3xx redirects manually
-    if ($httpCode >= 300 && $httpCode < 400) {
-        if (preg_match('~^location:\s*(.+)$~im', $rawHeaders, $m)) {
-            $location   = trim($m[1]);
-            $currentUrl = preg_match('~^https?://~i', $location)
-                ? $location
-                : absoluteUrl($location, $currentUrl);
-            $hops++;
-            continue;
-        }
-    }
-    break;   // not a redirect — done
-}
+$content  = curl_exec($ch);
+$httpCode = (int)    curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$ctype    = (string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+$curlErr  = curl_error($ch);
+$finalUrl = (string) curl_getinfo($ch, CURLINFO_EFFECTIVE_URL) ?: $targetUrl;
 curl_close($ch);
 
 // ── Error responses ───────────────────────────────────────────────────────────
