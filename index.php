@@ -601,9 +601,7 @@ const TCTV = window.TCTV = {
   // onFatal() is called when all recovery attempts are exhausted.
   _makeHls(streamUrl, onFatal){
     let netRetries = 0, mediaRetries = 0;
-    // For proxy attempts: 0 net retries so a 403/502 switches immediately to raw_url.
-    // For direct raw attempts: 1 retry gives the CDN a second chance.
-    const MAX_NET   = streamUrl.startsWith('proxy.php') ? 0 : 1;
+    const MAX_NET   = 1;   // one retry on network error before switching servers
     const MAX_MEDIA = 2;
 
     const hls = new Hls({
@@ -616,8 +614,9 @@ const TCTV = window.TCTV = {
       fragLoadingRetryDelay:1500,
       manifestLoadingRetryDelay:1500,
       levelLoadingRetryDelay:1500,
-      // NOTE: xhrSetup cannot inject Origin — browsers block it as a forbidden
-      // header. Referer spoofing is handled server-side in proxy.php instead.
+      // All URLs from proxy.php are same-origin — no CORS headers needed.
+      // proxy.php rewrites every M3U8 segment URL back through itself,
+      // so HLS.js never issues a cross-origin request.
     });
     hls.loadSource(streamUrl);
     hls.attachMedia(this.player);
@@ -653,13 +652,6 @@ const TCTV = window.TCTV = {
     else this.hideWarning();
 
     if(Hls.isSupported()){
-      // ── Two-attempt strategy ──────────────────────────────────────────────
-      // Attempt 1: proxy_url — server-side proxy with Referer spoofing
-      //   Works when the CDN allows our cPanel IP
-      // Attempt 2: raw_url — direct browser fetch with xhrSetup Origin header
-      //   Works when the CDN blocks datacenter IPs but allows residential IPs
-      let triedDirect = false;
-
       const onManifest = () => {
         this.hideSpinner();
         this.player.play().catch(e=>{
@@ -668,52 +660,29 @@ const TCTV = window.TCTV = {
         this.setBadge(srv.name);
       };
 
-      const onDirectFatal = () => {
+      const onFatal = () => {
         this.destroyHls();
         this.failedServers.add(idx);
         this.markFailed(idx);
         this.showError(srv.name+' unavailable','Trying next server…',true);
       };
 
-      const onProxyFatal = () => {
-        this.destroyHls();
-        if(!triedDirect && srv.raw_url){
-          triedDirect = true;
-          console.warn('[player] proxy failed — retrying direct:', srv.raw_url);
-          this.showSpinner('Retrying '+srv.name+' (direct)…', srv.group||'');
-          this.hls = this._makeHls(srv.raw_url, onDirectFatal);
-          this.hls.on(Hls.Events.MANIFEST_PARSED, onManifest);
-        } else {
-          onDirectFatal();
-        }
-      };
-
-      this.hls = this._makeHls(srv.proxy_url, onProxyFatal);
+      // All requests route through proxy.php.
+      // proxy.php spoofs Origin/Referer server-side and rewrites every M3U8
+      // segment URL back through itself — HLS.js never sees a cross-origin URL.
+      this.hls = this._makeHls(srv.proxy_url, onFatal);
       this.hls.on(Hls.Events.MANIFEST_PARSED, onManifest);
 
     }else if(this.player.canPlayType('application/vnd.apple.mpegurl')){
-      // Native HLS (iOS Safari) — try proxy first, fall back to raw
-      const tryRaw = () => {
-        if(srv.raw_url){
-          this.player.src = srv.raw_url;
-          this.player.load();
-          this.player.addEventListener('loadedmetadata',()=>{
-            this.hideSpinner(); this.player.play().catch(()=>{}); this.setBadge(srv.name);
-          },{once:true});
-          this.player.addEventListener('error',()=>{
-            this.failedServers.add(idx); this.markFailed(idx);
-            this.showError(srv.name+' failed','Trying next server…',true);
-          },{once:true});
-        } else {
-          this.failedServers.add(idx); this.markFailed(idx);
-          this.showError(srv.name+' failed','Trying next server…',true);
-        }
-      };
+      // Native HLS (iOS Safari)
       this.player.src = srv.proxy_url;
       this.player.addEventListener('loadedmetadata',()=>{
         this.hideSpinner(); this.player.play().catch(()=>{}); this.setBadge(srv.name);
       },{once:true});
-      this.player.addEventListener('error', tryRaw, {once:true});
+      this.player.addEventListener('error',()=>{
+        this.failedServers.add(idx); this.markFailed(idx);
+        this.showError(srv.name+' failed','Trying next server…',true);
+      },{once:true});
     }else{
       this.showError('Your browser does not support HLS','Try Chrome, Safari, or Edge');
     }

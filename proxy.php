@@ -1,31 +1,32 @@
 <?php
 /**
- * proxy.php — Smart HLS Media Proxy
+ * proxy.php — Ultra-Stealth HLS Media Proxy
  *
- * ROUTING LOGIC (based on live network audit, July 2026):
+ * Every upstream request is sent with a full mobile Safari identity
+ * (UA, Origin, Referer, Sec-Fetch headers) so CDNs and Cloudflare Workers
+ * see a legitimate browser, not a datacenter bot.
  *
- *   M3U8 playlists  → always fetched server-side (proxy handles Referer/Origin spoofing)
- *   TS segments     → two paths:
- *     a) TikTok CDN (p*-common-sign.tiktokcdn.com) — these are served as global media
- *        with no CORS restriction on browsers. However, datacenter IPs get blocked.
- *        Solution: return a 302 redirect so the browser fetches them directly.
- *     b) All other segments — proxy server-side as normal.
+ * M3U8 REWRITING
+ * When the upstream returns an M3U8 playlist, every URL inside it is rewritten
+ * to route back through this proxy.php, so HLS.js never makes a cross-origin
+ * request — everything is served from the same techandclick.site origin and
+ * CORS is never an issue.
  *
- * Why Server 1 (ToffeeLive) is NOT proxied:
- *   - ToffeeLive CDN blocks datacenter IPs (returns connection error → 502)
- *   - ToffeeLive CDN sends NO Access-Control-Allow-Origin header
- *   - Both proxy AND direct browser fetch fail — stream.php marks it direct=false
- *     and index.php skips it; only Server 4 (cinecdn) is viable
+ * CONFIRMED WORKING (audit 2026-07-02, cPanel IP 148.251.35.206):
+ *   fx.cinecdn.workers.dev  → HTTP 200 with Origin: fifalive.click ✓
  *
- * SSRF protections: loopback, link-local, and private ranges are blocked.
+ * SSRF PROTECTION
+ * Loopback, link-local, and RFC-1918 private ranges are blocked.
+ * Only http / https schemes are allowed.
  */
 
 set_time_limit(60);
 
-// ── CORS + cache headers ─────────────────────────────────────────────────────
+// ── CORS headers ──────────────────────────────────────────────────────────────
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, HEAD, OPTIONS');
-header('Access-Control-Allow-Headers: Range, Origin, Accept, Accept-Language');
+header('Access-Control-Allow-Headers: Range, Origin, Accept, Accept-Language, Cache-Control');
+header('Access-Control-Expose-Headers: Content-Length, Content-Range');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
@@ -35,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// ── Validate ?url= ───────────────────────────────────────────────────────────
+// ── Validate ?url= ────────────────────────────────────────────────────────────
 $rawInput = isset($_GET['url']) ? trim($_GET['url']) : '';
 if ($rawInput === '') {
     http_response_code(400);
@@ -54,13 +55,13 @@ if (!in_array($scheme, ['http', 'https'], true)) {
     die('Only http/https URLs allowed.');
 }
 
-// ── SSRF block-list ──────────────────────────────────────────────────────────
+// ── SSRF block-list ───────────────────────────────────────────────────────────
 $targetHost = strtolower(parse_url($targetUrl, PHP_URL_HOST) ?? '');
 $ownHost    = strtolower($_SERVER['HTTP_HOST'] ?? '');
 
 foreach (['localhost', '127.0.0.1', '::1', '0.0.0.0', '169.254.169.254',
-          '100.100.100.200', 'metadata.google.internal'] as $b) {
-    if ($targetHost === $b) { http_response_code(403); die('Blocked.'); }
+          '100.100.100.200', 'metadata.google.internal'] as $blocked) {
+    if ($targetHost === $blocked) { http_response_code(403); die('Blocked.'); }
 }
 if ($targetHost !== '' && $targetHost === $ownHost) {
     http_response_code(403); die('Self-request blocked.');
@@ -69,15 +70,12 @@ if (preg_match('~^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.)~', $tar
     http_response_code(403); die('Private address blocked.');
 }
 
-// NOTE: TikTok CDN segments (.image URLs from tiktokcdn.com) are proxied
-// server-side like everything else. A 302 redirect cannot be used here because
-// HLS.js fetches segments via XHR/fetch with mode:cors — the browser would
-// follow the redirect to tiktokcdn.com, which has no CORS headers, and block
-// the response. Full server-side proxying is the only viable path.
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-/** Resolve a relative href against a base URL. */
+/**
+ * Resolve a relative URL against a base URL.
+ * Handles absolute, protocol-relative, root-relative, and relative paths.
+ */
 function absoluteUrl(string $href, string $baseUrl): string {
     if (preg_match('~^https?://~i', $href)) return $href;
 
@@ -87,9 +85,9 @@ function absoluteUrl(string $href, string $baseUrl): string {
     $path   = $p['path']   ?? '/';
 
     if (substr($href, 0, 2) === '//') return $scheme . ':' . $href;
-    if ($href[0] === '/')              return $scheme . '://' . $host . $href;
+    if ($href !== '' && $href[0] === '/') return $scheme . '://' . $host . $href;
 
-    // dirname() can return false on malformed paths in PHP 8 — null-coalesce to '/'
+    // Relative path — resolve against directory of base path
     $dir = (substr($path, -1) === '/' || strpos(basename($path ?? ''), '.') === false)
         ? rtrim($path ?? '', '/') . '/'
         : rtrim(dirname($path ?? '/') ?: '/', '/') . '/';
@@ -98,7 +96,9 @@ function absoluteUrl(string $href, string $baseUrl): string {
 }
 
 /**
- * Rewrite every URL in an M3U8 to route through this proxy.
+ * Rewrite every URL in an M3U8 playlist so all subsequent requests
+ * (segments, sub-playlists, encryption keys) route through proxy.php.
+ * HLS.js only ever sees same-origin URLs — no CORS errors possible.
  */
 function rewriteM3u8(string $body, string $baseUrl): string {
     $lines = preg_split('~\r?\n~', $body);
@@ -108,12 +108,11 @@ function rewriteM3u8(string $body, string $baseUrl): string {
         if ($t === '') continue;
 
         if ($t[0] !== '#') {
+            // Segment or sub-playlist URL
             $abs       = absoluteUrl($t, $baseUrl);
             $lines[$i] = 'proxy.php?url=' . rawurlencode($abs) . '&raw=true';
         } else {
-            // Use ~ delimiter so URLs inside URI="..." never conflict with the pattern.
-            // Capture group 1 = quote char, group 2 = URI value, \1 = matching close quote.
-            // Falls back to original line if regex errors or finds no match.
+            // Tag line — rewrite URI="..." attributes (encryption keys, init segments)
             $rewritten = preg_replace_callback(
                 '~URI=(["\'])([^"\']+)\1~i',
                 function (array $m) use ($baseUrl): string {
@@ -130,22 +129,22 @@ function rewriteM3u8(string $body, string $baseUrl): string {
 }
 
 /**
- * Pick the correct Referer/Origin for each upstream host.
- * CDNs validate this header — sending the wrong value causes 403.
+ * Return the correct Referer for a given upstream host.
+ * Confirmed via live audit — wrong Origin/Referer causes 403.
+ *
+ *   fx.cinecdn.workers.dev → Origin: https://fifalive.click → HTTP 200 ✓
+ *   TikTok CDN segments    → Referer: https://fx.cinecdn.workers.dev/
+ *   toffeelive CDN         → Origin: https://toffeelive.com (IP-blocked anyway)
  */
 function inferReferer(string $url): string {
     $host = strtolower(parse_url($url, PHP_URL_HOST) ?? '');
 
     $map = [
-        // Server 4 — cinecdn Cloudflare Worker requires fifalive origin
         'cinecdn.workers.dev'        => 'https://fifalive.click/',
         'nextgoal.workers.dev'       => 'https://fifalive.click/',
         'smtahmidx.workers.dev'      => 'https://fifalive.click/',
-        // TikTok CDN segments — served via fx.cinecdn.workers.dev
-        // Must use the Worker URL as referer, not fifalive directly
         'tiktokcdn.com'              => 'https://fx.cinecdn.workers.dev/',
         'tiktok.com'                 => 'https://fx.cinecdn.workers.dev/',
-        // ToffeeLive CDN (kept for completeness; blocked by IP regardless)
         'prod-cdn01-live.toffeelive' => 'https://toffeelive.com/',
         'toffeelive.com'             => 'https://toffeelive.com/',
     ];
@@ -157,13 +156,17 @@ function inferReferer(string $url): string {
     return 'https://fifalive.click/';
 }
 
-// ── Determine client IP to forward ───────────────────────────────────────────
+// ── Build spoofed request headers ─────────────────────────────────────────────
+$referer = inferReferer($targetUrl);
+$parsed  = parse_url($referer);
+$origin  = ($parsed['scheme'] ?? 'https') . '://' . ($parsed['host'] ?? '');
+
+// Forward the real visitor IP so CDN WAFs see a residential IP
 $clientIp = $_SERVER['HTTP_CF_CONNECTING_IP']
          ?? $_SERVER['HTTP_X_FORWARDED_FOR']
          ?? $_SERVER['HTTP_X_REAL_IP']
          ?? $_SERVER['REMOTE_ADDR']
          ?? '';
-
 if (str_contains($clientIp, ',')) {
     $clientIp = trim(explode(',', $clientIp)[0]);
 }
@@ -172,17 +175,21 @@ if (!filter_var($clientIp, FILTER_VALIDATE_IP,
     $clientIp = '';
 }
 
-// ── Build request headers ─────────────────────────────────────────────────────
-$referer = inferReferer($targetUrl);
-$parsed  = parse_url($referer);
-$origin  = ($parsed['scheme'] ?? 'https') . '://' . ($parsed['host'] ?? '');
-
 $headers = [
-    'Accept: application/vnd.apple.mpegurl, application/x-mpegurl, video/MP2T, */*',
+    // Exact Accept string sent by iOS Safari when loading HLS
+    'Accept: application/vnd.apple.mpegurl, application/x-mpegurl, video/MP2T, */*;q=0.9',
     'Accept-Language: en-US,en;q=0.9',
+    'Accept-Encoding: gzip, deflate, br',
+    // The two headers CDNs and Workers check for access control
     'Referer: '  . $referer,
     'Origin: '   . $origin,
+    'Cache-Control: no-cache',
+    'Pragma: no-cache',
     'Connection: keep-alive',
+    // Sec-Fetch headers make the request look like a real browser CORS request
+    'Sec-Fetch-Dest: empty',
+    'Sec-Fetch-Mode: cors',
+    'Sec-Fetch-Site: cross-site',
 ];
 if ($clientIp !== '') {
     $headers[] = 'X-Forwarded-For: '  . $clientIp;
@@ -191,23 +198,24 @@ if ($clientIp !== '') {
     $headers[] = 'X-Real-IP: '        . $clientIp;
 }
 
-// ── Fetch the upstream resource ───────────────────────────────────────────────
+// ── cURL fetch ────────────────────────────────────────────────────────────────
 $ch = curl_init($targetUrl);
 curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_FOLLOWLOCATION => true,          // follow 301/302 redirects
+    CURLOPT_FOLLOWLOCATION => true,
     CURLOPT_MAXREDIRS      => 5,
-    // Mobile Safari UA — CDNs and Workers skip bot-detection for known mobile UAs
-    CURLOPT_USERAGENT      => 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-    // CURLOPT_REFERER sets the Referer header at the cURL layer — it persists
-    // correctly through redirects, unlike a header set only in CURLOPT_HTTPHEADER
+    // Full iOS 17 Safari UA — must match the Accept headers above
+    CURLOPT_USERAGENT      => 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) '
+                            . 'AppleWebKit/605.1.15 (KHTML, like Gecko) '
+                            . 'Version/17.5 Mobile/15E148 Safari/604.1',
+    // Set Referer at cURL level too — persists correctly through redirects
     CURLOPT_REFERER        => $referer,
     CURLOPT_SSL_VERIFYPEER => false,
     CURLOPT_SSL_VERIFYHOST => 0,
-    CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4,  // force IPv4 — broken IPv6 on some cPanel hosts
+    CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4,  // IPv4 only — broken IPv6 on some cPanel hosts
     CURLOPT_CONNECTTIMEOUT => 15,
-    CURLOPT_TIMEOUT        => 45,
-    CURLOPT_ENCODING       => '',            // handles gzip/br/deflate compressed responses
+    CURLOPT_TIMEOUT        => 45,                  // generous for large TS segments
+    CURLOPT_ENCODING       => '',                  // auto-decompress gzip / br
     CURLOPT_HTTPHEADER     => $headers,
 ]);
 
@@ -219,9 +227,9 @@ $finalUrl = (string) curl_getinfo($ch, CURLINFO_EFFECTIVE_URL) ?: $targetUrl;
 curl_close($ch);
 
 // ── Error responses ───────────────────────────────────────────────────────────
-if ($content === false) {
+if ($content === false || $content === '') {
     http_response_code(502);
-    die('Upstream fetch failed: ' . htmlspecialchars($curlErr));
+    die('Upstream fetch failed: ' . htmlspecialchars($curlErr ?: 'empty response'));
 }
 
 if ($httpCode >= 400) {
@@ -229,7 +237,8 @@ if ($httpCode >= 400) {
     die('Upstream HTTP ' . $httpCode);
 }
 
-// ── Detect M3U8 ──────────────────────────────────────────────────────────────
+// ── Detect and rewrite M3U8 ───────────────────────────────────────────────────
+// Some CDNs send M3U8 as text/plain — also check body content and URL extension.
 $looksLikeM3u8 =
     stripos($ctype, 'mpegurl')               !== false ||
     stripos($ctype, 'application/vnd.apple') !== false ||
@@ -238,15 +247,16 @@ $looksLikeM3u8 =
     preg_match('~\.m3u8(\?|$)~i', parse_url($finalUrl, PHP_URL_PATH) ?? '');
 
 if ($looksLikeM3u8) {
-    $rewritten = rewriteM3u8($content, $finalUrl);
     header('Content-Type: application/vnd.apple.mpegurl; charset=utf-8');
-    http_response_code($httpCode ?: 200);
-    echo $rewritten;
+    http_response_code(200);
+    echo rewriteM3u8($content, $finalUrl);
     exit;
 }
 
 // ── Binary media pass-through ─────────────────────────────────────────────────
+// Map extensions to MIME types — many CDNs send wrong or missing Content-Type.
 $ext = strtolower(pathinfo(parse_url($finalUrl, PHP_URL_PATH) ?? '', PATHINFO_EXTENSION));
+
 $extMap = [
     'ts'    => 'video/MP2T',
     'aac'   => 'audio/aac',
@@ -257,18 +267,15 @@ $extMap = [
     'key'   => 'application/octet-stream',
     'bin'   => 'application/octet-stream',
     'mp3'   => 'audio/mpeg',
-    // TikTok CDN sends TS bytes disguised as .image
-    'image' => 'video/MP2T',
+    'image' => 'video/MP2T',  // TikTok CDN disguises TS packets as .image files
 ];
 
 if (isset($extMap[$ext])) {
     $ctype = $extMap[$ext];
-} elseif (
-    $ctype === '' ||
-    stripos($ctype, 'text/')        !== false ||
-    stripos($ctype, 'image/')       !== false ||
-    stripos($ctype, 'octet-stream') !== false
-) {
+} elseif ($ctype === '' || stripos($ctype, 'text/') !== false
+       || stripos($ctype, 'image/') !== false
+       || stripos($ctype, 'octet-stream') !== false) {
+    // Last resort: detect MPEG-TS by sync byte 0x47
     $ctype = (strlen($content) > 0 && ord($content[0]) === 0x47)
         ? 'video/MP2T'
         : ($ctype ?: 'application/octet-stream');
