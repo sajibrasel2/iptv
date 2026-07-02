@@ -46,7 +46,7 @@ $FALLBACK = [
 // ── Fix malformed URLs (e.g. workers*dev → workers.dev) ──────────────────────
 function sanitiseUrl(string $raw): string {
     $url = trim($raw);
-    if (preg_match('@^(https?://)([^/?#]+)(.*)$@i', $url, $m)) {
+    if (preg_match('~^(https?://)([^/?#]+)(.*)$~i', $url, $m)) {
         return $m[1] . str_replace('*', '.', $m[2]) . $m[3];
     }
     return $url;
@@ -64,7 +64,7 @@ function isM3u8(string $body, string $ctype): bool {
 
 // ── Parse master M3U8 into server array ──────────────────────────────────────
 function parseMaster(string $body): array {
-    $lines   = preg_split('/\r?\n/', trim($body));
+    $lines   = preg_split('~\r?\n~', trim($body));
     $servers = [];
     $pending = ['name' => '', 'group' => 'Live', 'logo' => ''];
 
@@ -76,10 +76,10 @@ function parseMaster(string $body): array {
             $name  = '';
             $group = 'Live';
             $logo  = '';
-            if (preg_match('/tvg-name=["\']([^"\']+)["\']/i',    $line, $m)) $name  = $m[1];
-            if (preg_match('/group-title=["\']([^"\']+)["\']/i', $line, $m)) $group = $m[1];
-            if (preg_match('/tvg-logo=["\']([^"\']+)["\']/i',    $line, $m)) $logo  = $m[1];
-            if ($name === '' && preg_match('/,(.+)$/', $line, $m))           $name  = trim($m[1]);
+            if (preg_match('~tvg-name=["\']([^"\']+)["\']~i',    $line, $m)) $name  = $m[1];
+            if (preg_match('~group-title=["\']([^"\']+)["\']~i', $line, $m)) $group = $m[1];
+            if (preg_match('~tvg-logo=["\']([^"\']+)["\']~i',    $line, $m)) $logo  = $m[1];
+            if ($name === '' && preg_match('~,(.+)$~', $line, $m))           $name  = trim($m[1]);
             $pending = [
                 'name'  => $name  ?: ('Server ' . (count($servers) + 1)),
                 'group' => $group ?: 'Live',

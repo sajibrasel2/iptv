@@ -65,7 +65,7 @@ foreach (['localhost', '127.0.0.1', '::1', '0.0.0.0', '169.254.169.254',
 if ($targetHost !== '' && $targetHost === $ownHost) {
     http_response_code(403); die('Self-request blocked.');
 }
-if (preg_match('/^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.)/', $targetHost)) {
+if (preg_match('~^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.)~', $targetHost)) {
     http_response_code(403); die('Private address blocked.');
 }
 
@@ -79,7 +79,7 @@ if (preg_match('/^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.)/', $tar
 
 /** Resolve a relative href against a base URL. */
 function absoluteUrl(string $href, string $baseUrl): string {
-    if (preg_match('#^https?://#i', $href)) return $href;
+    if (preg_match('~^https?://~i', $href)) return $href;
 
     $p      = parse_url($baseUrl);
     $scheme = $p['scheme'] ?? 'https';
@@ -101,7 +101,7 @@ function absoluteUrl(string $href, string $baseUrl): string {
  * Rewrite every URL in an M3U8 to route through this proxy.
  */
 function rewriteM3u8(string $body, string $baseUrl): string {
-    $lines = preg_split('/\r?\n/', $body);
+    $lines = preg_split('~\r?\n~', $body);
 
     foreach ($lines as $i => $line) {
         $t = trim($line);
@@ -111,16 +111,18 @@ function rewriteM3u8(string $body, string $baseUrl): string {
             $abs       = absoluteUrl($t, $baseUrl);
             $lines[$i] = 'proxy.php?url=' . rawurlencode($abs) . '&raw=true';
         } else {
-            // preg_replace_callback returns null on error in PHP 8 — keep original line as fallback
+            // Use ~ delimiter so URLs inside URI="..." never conflict with the pattern.
+            // Capture group 1 = quote char, group 2 = URI value, \1 = matching close quote.
+            // Falls back to original line if regex errors or finds no match.
             $rewritten = preg_replace_callback(
-                '/URI=(["\'])([^"\']+)\1/i',
+                '~URI=(["\'])([^"\']+)\1~i',
                 function (array $m) use ($baseUrl): string {
                     $abs = absoluteUrl($m[2], $baseUrl);
                     return 'URI="proxy.php?url=' . rawurlencode($abs) . '&raw=true"';
                 },
                 $t
             );
-            $lines[$i] = $rewritten ?? $t;   // fall back to original line if regex fails
+            $lines[$i] = $rewritten ?? $t;
         }
     }
 
@@ -231,7 +233,7 @@ $looksLikeM3u8 =
     stripos($ctype, 'application/vnd.apple') !== false ||
     (is_string($content) && stripos(ltrim($content), '#EXTM3U') === 0) ||
     (is_string($content) && stripos(ltrim($content), '#EXT-X-')  === 0) ||
-    preg_match('/\.m3u8(\?|$)/i', parse_url($finalUrl, PHP_URL_PATH) ?? '');
+    preg_match('~\.m3u8(\?|$)~i', parse_url($finalUrl, PHP_URL_PATH) ?? '');
 
 if ($looksLikeM3u8) {
     $rewritten = rewriteM3u8($content, $finalUrl);
