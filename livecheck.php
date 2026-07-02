@@ -1,60 +1,51 @@
 <?php
 /**
- * livecheck.php — Quick connectivity audit from the cPanel server.
- * DELETE after use. Visit: https://techandclick.site/iptv/livecheck.php
+ * livecheck.php — Worker connectivity audit from cPanel server.
+ * DELETE after use.
  */
-set_time_limit(30);
+set_time_limit(35);
 header('Content-Type: text/plain; charset=utf-8');
 
 $tests = [
-    'cinecdn'   => 'https://fx.cinecdn.workers.dev/',
-    'tahmidx'   => 'https://tahmidx.shusanta-project.workers.dev/',
-    'smtahmidx' => 'https://live.smtahmidx.workers.dev/',
-    'mux-test'  => 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
-];
-
-$referers = [
-    'cinecdn'   => 'https://fifalive.click/',
-    'tahmidx'   => 'https://fifalive.click/',
-    'smtahmidx' => 'https://fifalive.click/',
-    'mux-test'  => 'https://test-streams.mux.dev/',
+    'cinecdn (Server 4 DB)'    => 'https://fx.cinecdn.workers.dev/',
+    'fox-fhd (Server 4 scrape)'=> 'https://fox-fhd.nextgoalfox.workers.dev/',
+    'fx-4k (Server 5)'         => 'https://fx-4k.fifalive-app.workers.dev/',
+    'tahmidx (Server 2)'       => 'https://tahmidx.shusanta-project.workers.dev/',
+    'smtahmidx (Server 3)'     => 'https://live.smtahmidx.workers.dev/',
 ];
 
 foreach ($tests as $label => $url) {
     echo "=== $label ===\n";
-    $ref = $referers[$label];
-    $org = rtrim($ref, '/');
-    $ch  = curl_init($url);
+    $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HEADER         => true,
         CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_FOLLOWLOCATION => false,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS      => 3,
         CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4,
         CURLOPT_CONNECTTIMEOUT => 8,
         CURLOPT_TIMEOUT        => 10,
         CURLOPT_USERAGENT      => 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
-        CURLOPT_REFERER        => $ref,
+        CURLOPT_REFERER        => 'https://fifalive.click/',
         CURLOPT_HTTPHEADER     => [
-            'Origin: ' . $org,
-            'Referer: ' . $ref,
+            'Origin: https://fifalive.click',
+            'Referer: https://fifalive.click/',
             'Accept: application/vnd.apple.mpegurl, */*',
         ],
     ]);
-    $resp = curl_exec($ch);
-    $hs   = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+    $body = curl_exec($ch);
     $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $err  = curl_error($ch);
-    $ip   = curl_getinfo($ch, CURLINFO_PRIMARY_IP);
     curl_close($ch);
 
-    $body = substr($resp, $hs, 200);
-    echo "HTTP: $code | IP: $ip | err: " . ($err ?: 'none') . "\n";
-    echo "Body: " . $body . "\n\n";
+    $status = ($code === 200 && str_contains($body, '#EXTM3U')) ? '✓ M3U8 OK' :
+              ($code === 200 ? '~ HTTP 200 but no M3U8' :
+              "✗ HTTP $code");
+    echo "$status | err: " . ($err ?: 'none') . "\n";
+    if ($code === 200 && str_contains($body, '#EXTM3U')) {
+        echo "Preview: " . substr($body, 0, 120) . "\n";
+    } else {
+        echo "Body: " . substr($body, 0, 80) . "\n";
+    }
+    echo "\n";
 }
-
-// Server's own outbound IP
-$ch = curl_init('https://api.ipify.org');
-curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5, CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4]);
-echo "=== Server outbound IP ===\n" . curl_exec($ch) . "\n";
-curl_close($ch);
