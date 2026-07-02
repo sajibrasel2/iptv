@@ -226,29 +226,63 @@ $initialPlayerSrc = 'proxy.php?url=' . rawurlencode($autoplayUrl);
                     const doc = iframe.contentDocument || iframe.contentWindow.document;
                     if (!doc || !doc.body) return;
                     
-                    const selectors = [
+                    const safeSelectors = [
                         '#socialWidget', '.social-box', '.social-btn', '.close-social',
                         '#sticky-header-notice', '.sticky-notice',
                         '.marquee-wrapper', '.marquee-text', '.scrolling-marquee', '.marquee-container', '.marquee',
                         '#fbLockerBtn', '.locker-fb-btn', '#lockerCountdown', '.countdown-text', '#countNumber',
-                        '.facebook-follow', '.telegram-follow', '#telegram-bar',
+                        '.facebook-follow', '.telegram-follow', '#telegram-bar'
+                    ];
+
+                    const genericSelectors = [
                         '.promo-text', '.overlay', '.popup', '.announcement-bar', '.top-bar',
                         '.follow-container', '.social-buttons'
                     ];
 
+                    const isSafeToRemove = (el) => {
+                        if (!el) return false;
+                        const tag = el.tagName;
+                        if (tag === 'VIDEO' || tag === 'IFRAME' || tag === 'CANVAS' || tag === 'BODY' || tag === 'HTML') {
+                            return false;
+                        }
+                        if (el.id === 'player' || el.id === 'main-player' || el.classList.contains('jwplayer') || el.classList.contains('video-js') || el.classList.contains('plyr')) {
+                            return false;
+                        }
+                        if (el.querySelector('video, iframe, canvas, #player, .jwplayer, .video-js, .plyr')) {
+                            return false;
+                        }
+                        return true;
+                    };
+
                     const clean = () => {
-                        selectors.forEach(sel => {
+                        safeSelectors.forEach(sel => {
                             doc.querySelectorAll(sel).forEach(el => {
-                                el.style.setProperty('display', 'none', 'important');
-                                try { el.remove(); } catch(e) {}
+                                if (isSafeToRemove(el)) {
+                                    el.style.setProperty('display', 'none', 'important');
+                                    try { el.remove(); } catch(e) {}
+                                }
+                            });
+                        });
+
+                        genericSelectors.forEach(sel => {
+                            doc.querySelectorAll(sel).forEach(el => {
+                                if (isSafeToRemove(el)) {
+                                    el.style.setProperty('display', 'none', 'important');
+                                    try { el.remove(); } catch(e) {}
+                                }
                             });
                         });
                         
-                        doc.querySelectorAll('div, a').forEach(el => {
+                        doc.querySelectorAll('p, span, a, div').forEach(el => {
+                            if (el.tagName === 'DIV' && el.children.length > 0) {
+                                return;
+                            }
                             const text = el.textContent || '';
                             if (text.includes('Follow on Facebook') || text.includes('Follow on Telegram') || text.includes('খেলা শুরু আগে')) {
-                                el.style.setProperty('display', 'none', 'important');
-                                try { el.remove(); } catch(e) {}
+                                if (isSafeToRemove(el)) {
+                                    el.style.setProperty('display', 'none', 'important');
+                                    try { el.remove(); } catch(e) {}
+                                }
                             }
                         });
                     };

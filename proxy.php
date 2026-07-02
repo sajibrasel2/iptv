@@ -54,58 +54,89 @@ if (stripos($contentType, 'text/html') !== false) {
     $content = preg_replace('/<(?:div|section|aside|article|p|span|button|a)[^>]*(?:id|class)=["\'][^"\']*(?:socialWidget|social-box|social-btn|close-social|sticky-header-notice|sticky-notice|marquee-wrapper|marquee-text|fbLockerBtn|locker-fb-btn|lockerCountdown|countdown-text|countNumber)[^"\']*["\'][^>]*>[\s\S]*?<\/(?:div|section|aside|article|p|span|button|a)>/iu', '', $content);
     $content = preg_replace('/<(?:div|section|aside|article|p|span|button|a)[^>]*(?:id|class)=["\'][^"\']*(?:socialWidget|social-box|social-btn|close-social|sticky-header-notice|sticky-notice|marquee-wrapper|marquee-text|fbLockerBtn|locker-fb-btn|lockerCountdown|countdown-text|countNumber)[^"\']*["\'][^>]*\/>/iu', '', $content);
 
-    $overlayCss = '<style id="proxy-iframe-overlay-style">#socialWidget, .social-box, .social-btn, .close-social, #sticky-header-notice, .sticky-notice, .marquee-wrapper, .marquee-text, #fbLockerBtn, .locker-fb-btn, #lockerCountdown, .countdown-text, #countNumber, .facebook-follow, .telegram-follow, #telegram-bar, .promo-text, .overlay, .popup, .announcement-bar, .top-bar, .follow-container, .social-buttons { display: none !important; visibility: hidden !important; opacity: 0 !important; height: 0 !important; min-height: 0 !important; overflow: hidden !important; pointer-events: none !important; }</style>';
+    $overlayCss = '<style id="proxy-iframe-overlay-style">
+        #socialWidget, .social-box, .social-btn, .close-social, 
+        #sticky-header-notice, .sticky-notice, 
+        .marquee-wrapper, .marquee-text, .scrolling-marquee, .marquee-container, .marquee,
+        #fbLockerBtn, .locker-fb-btn, #lockerCountdown, .countdown-text, #countNumber,
+        .facebook-follow, .telegram-follow, #telegram-bar { 
+            display: none !important; 
+            visibility: hidden !important; 
+            opacity: 0 !important; 
+            height: 0 !important; 
+            min-height: 0 !important; 
+            overflow: hidden !important; 
+            pointer-events: none !important; 
+        }
+        video, #player, .jwplayer, .video-js, .plyr {
+            width: 100% !important;
+            height: 100% !important;
+        }
+    </style>';
 
     $observerScript = '<script id="proxy-iframe-observer-script">
     (function() {
-        const selectors = [
+        const safeSelectors = [
             "#socialWidget", ".social-box", ".social-btn", ".close-social",
             "#sticky-header-notice", ".sticky-notice",
             ".marquee-wrapper", ".marquee-text", ".scrolling-marquee", ".marquee-container", ".marquee",
             "#fbLockerBtn", ".locker-fb-btn", "#lockerCountdown", ".countdown-text", "#countNumber",
-            ".facebook-follow", ".telegram-follow", "#telegram-bar",
+            ".facebook-follow", ".telegram-follow", "#telegram-bar"
+        ];
+
+        const genericSelectors = [
             ".promo-text", ".overlay", ".popup", ".announcement-bar", ".top-bar",
             ".follow-container", ".social-buttons"
         ];
 
+        function isSafeToRemove(el) {
+            if (!el) return false;
+            const tag = el.tagName;
+            if (tag === "VIDEO" || tag === "IFRAME" || tag === "CANVAS" || tag === "BODY" || tag === "HTML") {
+                return false;
+            }
+            if (el.id === "player" || el.id === "main-player" || el.classList.contains("jwplayer") || el.classList.contains("video-js") || el.classList.contains("plyr")) {
+                return false;
+            }
+            if (el.querySelector("video, iframe, canvas, #player, .jwplayer, .video-js, .plyr")) {
+                return false;
+            }
+            return true;
+        }
+
         function cleanDOM() {
-            selectors.forEach(selector => {
+            safeSelectors.forEach(selector => {
                 document.querySelectorAll(selector).forEach(el => {
-                    el.style.setProperty("display", "none", "important");
-                    el.style.setProperty("visibility", "hidden", "important");
-                    el.style.setProperty("opacity", "0", "important");
-                    el.style.setProperty("pointer-events", "none", "important");
-                    el.style.setProperty("height", "0", "important");
-                    el.style.setProperty("width", "0", "important");
-                    try { el.remove(); } catch(e) {}
+                    if (isSafeToRemove(el)) {
+                        el.style.setProperty("display", "none", "important");
+                        try { el.remove(); } catch(e) {}
+                    }
                 });
             });
 
-            // Deep text matching for dynamic elements
-            const allDivs = document.getElementsByTagName("div");
-            for (let i = 0; i < allDivs.length; i++) {
-                const div = allDivs[i];
-                const text = div.textContent || "";
-                if (text.includes("Follow on Facebook") || text.includes("Follow on Telegram") || text.includes("খেলা শুরু আগে")) {
-                    div.style.setProperty("display", "none", "important");
-                    div.style.setProperty("visibility", "hidden", "important");
-                    div.style.setProperty("opacity", "0", "important");
-                    div.style.setProperty("pointer-events", "none", "important");
-                    try { div.remove(); } catch(e) {}
-                }
-            }
+            genericSelectors.forEach(selector => {
+                document.querySelectorAll(selector).forEach(el => {
+                    if (isSafeToRemove(el)) {
+                        el.style.setProperty("display", "none", "important");
+                        try { el.remove(); } catch(e) {}
+                    }
+                });
+            });
 
-            const allLinks = document.getElementsByTagName("a");
-            for (let i = 0; i < allLinks.length; i++) {
-                const link = allLinks[i];
-                const text = link.textContent || "";
-                if (text.includes("Follow on Facebook") || text.includes("Follow on Telegram")) {
-                    link.style.setProperty("display", "none", "important");
-                    link.style.setProperty("visibility", "hidden", "important");
-                    link.style.setProperty("opacity", "0", "important");
-                    try { link.remove(); } catch(e) {}
+            const elementsToCheck = document.querySelectorAll("p, span, a, div");
+            elementsToCheck.forEach(el => {
+                if (el.tagName === "DIV" && el.children.length > 0) {
+                    return;
                 }
-            }
+                
+                const text = el.textContent || "";
+                if (text.includes("Follow on Facebook") || text.includes("Follow on Telegram") || text.includes("খেলা শুরু আগে")) {
+                    if (isSafeToRemove(el)) {
+                        el.style.setProperty("display", "none", "important");
+                        try { el.remove(); } catch(e) {}
+                    }
+                }
+            });
         }
 
         if (document.readyState === "loading") {
