@@ -89,17 +89,16 @@ function absoluteUrl(string $href, string $baseUrl): string {
     if (substr($href, 0, 2) === '//') return $scheme . ':' . $href;
     if ($href[0] === '/')              return $scheme . '://' . $host . $href;
 
-    $dir = (substr($path, -1) === '/' || strpos(basename($path), '.') === false)
-        ? rtrim($path, '/') . '/'
-        : rtrim(dirname($path), '/') . '/';
+    // dirname() can return false on malformed paths in PHP 8 — null-coalesce to '/'
+    $dir = (substr($path, -1) === '/' || strpos(basename($path ?? ''), '.') === false)
+        ? rtrim($path ?? '', '/') . '/'
+        : rtrim(dirname($path ?? '/') ?: '/', '/') . '/';
 
     return $scheme . '://' . $host . $dir . ltrim($href, './');
 }
 
 /**
  * Rewrite every URL in an M3U8 to route through this proxy.
- * TikTok CDN segment URLs are also proxied through proxy.php — proxy.php
- * will then issue a 302 redirect to the browser for those specific URLs.
  */
 function rewriteM3u8(string $body, string $baseUrl): string {
     $lines = preg_split('/\r?\n/', $body);
@@ -112,14 +111,16 @@ function rewriteM3u8(string $body, string $baseUrl): string {
             $abs       = absoluteUrl($t, $baseUrl);
             $lines[$i] = 'proxy.php?url=' . rawurlencode($abs) . '&raw=true';
         } else {
-            $lines[$i] = preg_replace_callback(
-                '/URI=["\']([^"\']+)["\']/i',
+            // preg_replace_callback returns null on error in PHP 8 — keep original line as fallback
+            $rewritten = preg_replace_callback(
+                '/URI=(["\'])([^"\']+)\1/i',
                 function (array $m) use ($baseUrl): string {
-                    $abs = absoluteUrl($m[1], $baseUrl);
+                    $abs = absoluteUrl($m[2], $baseUrl);
                     return 'URI="proxy.php?url=' . rawurlencode($abs) . '&raw=true"';
                 },
                 $t
             );
+            $lines[$i] = $rewritten ?? $t;   // fall back to original line if regex fails
         }
     }
 
