@@ -2,15 +2,16 @@
 /**
  * stream.php — Live Stream Extraction API
  *
- * Fetches fifalive.click on every request, parses the M3U8 playlist,
- * and returns ALL server URLs instantly — NO per-server validation.
+ * Fetches fifalive.click, parses the M3U8, and returns all servers instantly.
+ * No per-server validation — HLS.js handles that at play time.
  *
- * Validation was the root cause of the infinite spinner:
- *   - 4 sequential cURL requests x ~8s each = 32s total
- *   - cPanel kills PHP at max_execution_time (usually 30s)
- *   - fetch() in browser times out -> falls back to dead DB channels
+ * Each server entry carries a "direct" flag:
+ *   "direct": true  → CDN allows browser CORS; index.php sends raw_url straight
+ *                      to HLS.js, bypassing proxy.php (avoids datacenter-IP block)
+ *   "direct": false → Must route through proxy.php (applies Referer spoofing)
  *
- * The browser / HLS.js handles validation naturally by trying each server.
+ * ToffeeLive CDN blocks datacenter IPs with HTTP 502, but it serves with
+ * Access-Control-Allow-Origin: * so the browser can fetch it directly.
  */
 
 set_time_limit(20);
@@ -21,18 +22,35 @@ header('Pragma: no-cache');
 header('Expires: 0');
 header('Access-Control-Allow-Origin: *');
 
-// ── Fallback stream (always appended last) ───────────────────────────────────
+// ── Fallback stream ───────────────────────────────────────────────────────────
 $FALLBACK = [
     'name'        => 'Test Stream',
     'group'       => 'Fallback',
     'logo'        => '',
     'raw_url'     => 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
     'proxy_url'   => 'proxy.php?url=' . rawurlencode('https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8') . '&raw=true',
+    'direct'      => true,   // mux test CDN has open CORS
     'is_fallback' => true,
 ];
 
-// ── Fix malformed URLs from the source M3U8 ──────────────────────────────────
-// e.g. workers*dev -> workers.dev (fifalive sometimes has this typo)
+// ── Hosts that block datacenter IPs but allow browser CORS ───────────────────
+// These must be fetched DIRECTLY by the browser, not proxied through cPanel.
+$DIRECT_HOSTS = [
+    'toffeelive.com',
+    'prod-cdn01-live.toffeelive.com',
+    'prod-cdn02-live.toffeelive.com',
+    'prod-cdn03-live.toffeelive.com',
+];
+
+function isDirect(string $url, array $directHosts): bool {
+    $host = strtolower(parse_url($url, PHP_URL_HOST) ?? '');
+    foreach ($directHosts as $h) {
+        if ($host === $h || str_ends_with($host, '.' . $h)) return true;
+    }
+    return false;
+}
+
+// ── Fix malformed URLs (e.g. workers*dev -> workers.dev) ─────────────────────
 function sanitiseUrl(string $raw): string {
     $url = trim($raw);
     if (preg_match('@^(https?://)([^/?#]+)(.*)$@i', $url, $m)) {
@@ -51,8 +69,8 @@ function isM3u8(string $body, string $ctype): bool {
     return false;
 }
 
-// ── Parse master M3U8 into server entry array ────────────────────────────────
-function parseMaster(string $body): array {
+// ── Parse master M3U8 ────────────────────────────────────────────────────────
+function parseMaster(string $body, array $directHosts): array {
     $lines   = preg_split('/\r?\n/', trim($body));
     $servers = [];
     $pending = ['name' => '', 'group' => 'Live', 'logo' => ''];
@@ -78,14 +96,19 @@ function parseMaster(string $body): array {
         }
 
         if (isset($line[0]) && $line[0] !== '#') {
-            $clean = sanitiseUrl($line);
+            $clean  = sanitiseUrl($line);
+            $direct = isDirect($clean, $directHosts);
+
             if (filter_var($clean, FILTER_VALIDATE_URL)) {
                 $servers[] = [
                     'name'      => $pending['name']  ?: ('Server ' . (count($servers) + 1)),
                     'group'     => $pending['group'] ?: 'Live',
                     'logo'      => $pending['logo']  ?? '',
                     'raw_url'   => $clean,
+                    // proxy_url still built for non-direct servers
                     'proxy_url' => 'proxy.php?url=' . rawurlencode($clean) . '&raw=true',
+                    // direct=true means index.php will use raw_url instead of proxy_url
+                    'direct'    => $direct,
                 ];
             }
             $pending = ['name' => '', 'group' => 'Live', 'logo' => ''];
@@ -134,11 +157,9 @@ if ($body === false || $body === '') {
 } elseif (!isM3u8($body, $ctype)) {
     $errors[] = 'fifalive.click returned non-M3U8 (CT=' . $ctype . ') — possible paywall/captcha';
 } else {
-    // Parse and return all servers immediately — no per-server validation
-    $servers = parseMaster($body);
+    $servers = parseMaster($body, $DIRECT_HOSTS);
 }
 
-// Always append fallback at the end
 $servers[] = $FALLBACK;
 
 echo json_encode([

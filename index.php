@@ -567,13 +567,22 @@ const TCTV = window.TCTV = {
     if(srv.is_fallback)this.setWarning('⚠ All live sources failed. Showing test stream.');
     else this.hideWarning();
 
+    // If the CDN blocks datacenter IPs (e.g. ToffeeLive), "direct" is true.
+    // Use raw_url so the browser fetches directly — no proxy in the middle.
+    // If direct is false/absent, route through proxy.php for Referer spoofing.
+    const streamUrl = srv.direct ? srv.raw_url : srv.proxy_url;
+
     if(Hls.isSupported()){
       this.hls=new Hls({
         enableWorker:true,lowLatencyMode:true,maxMaxBufferLength:60,
         fragLoadingMaxRetry:6,manifestLoadingMaxRetry:6,levelLoadingMaxRetry:6,
         fragLoadingRetryDelay:1000,manifestLoadingRetryDelay:1000,
+        xhrSetup: function(xhr, url) {
+          // For direct CDN requests HLS.js needs no special headers — just let it fire.
+          // The xhrSetup hook is here in case we need to add auth later.
+        },
       });
-      this.hls.loadSource(srv.proxy_url);
+      this.hls.loadSource(streamUrl);
       this.hls.attachMedia(this.player);
 
       this.hls.on(Hls.Events.MANIFEST_PARSED,()=>{
@@ -603,7 +612,7 @@ const TCTV = window.TCTV = {
       });
     }else if(this.player.canPlayType('application/vnd.apple.mpegurl')){
       // Native HLS (iOS Safari)
-      this.player.src=srv.proxy_url;
+      this.player.src=streamUrl;
       this.player.addEventListener('loadedmetadata',()=>{
         this.hideSpinner();
         this.player.play().catch(e=>{});
