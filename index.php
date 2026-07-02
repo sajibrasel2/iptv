@@ -595,6 +595,53 @@ const TCTV = window.TCTV = {
   // ── HLS lifecycle ───────────────────────────────────────────────────────────
   destroyHls(){if(this.hls){this.hls.destroy();this.hls=null}},
 
+  // ── Build an HLS instance for a given URL ──────────────────────────────────
+  // onFatal(data) is called when all recovery attempts are exhausted.
+  _makeHls(streamUrl, onFatal){
+    let netRetries = 0, mediaRetries = 0;
+    const MAX_NET = 2, MAX_MEDIA = 2;
+
+    const hls = new Hls({
+      enableWorker:true,
+      lowLatencyMode:true,
+      maxMaxBufferLength:60,
+      fragLoadingMaxRetry:4,
+      manifestLoadingMaxRetry:3,
+      levelLoadingMaxRetry:3,
+      fragLoadingRetryDelay:1500,
+      manifestLoadingRetryDelay:1500,
+      levelLoadingRetryDelay:1500,
+      // Inject Origin: fifalive.click on every XHR to CDN / Worker domains.
+      // This lets the browser's residential IP pass the origin check that
+      // blocks our cPanel datacenter IP on proxy.php.
+      xhrSetup(xhr, url){
+        try{
+          const h = new URL(url).hostname;
+          if(h.endsWith('workers.dev') || h.includes('tiktokcdn.com') || h.includes('toffeelive.com')){
+            xhr.setRequestHeader('Origin', 'https://fifalive.click');
+          }
+        }catch(e){}
+      },
+    });
+    hls.loadSource(streamUrl);
+    hls.attachMedia(this.player);
+
+    hls.on(Hls.Events.ERROR,(ev,data)=>{
+      if(!data.fatal) return;
+      console.error('[HLS fatal]',data.type,data.details,streamUrl);
+      if(data.type===Hls.ErrorTypes.NETWORK_ERROR){
+        if(netRetries < MAX_NET){ netRetries++; hls.startLoad(); }
+        else onFatal(data);
+      } else if(data.type===Hls.ErrorTypes.MEDIA_ERROR){
+        if(mediaRetries < MAX_MEDIA){ mediaRetries++; hls.recoverMediaError(); }
+        else onFatal(data);
+      } else {
+        onFatal(data);
+      }
+    });
+    return hls;
+  },
+
   loadServer(idx){
     if(!this.servers[idx])return;
     this.currentIdx=idx;
@@ -609,97 +656,70 @@ const TCTV = window.TCTV = {
     if(srv.is_fallback)this.setWarning('⚠ All live sources failed. Showing test stream.');
     else this.hideWarning();
 
-    // Route all servers through proxy.php — it handles Referer spoofing.
-    const streamUrl = srv.proxy_url;
-
     if(Hls.isSupported()){
-      // ── Recovery counters — reset per-server-load ────────────────────────
-      let networkRecoveries = 0;
-      let mediaRecoveries   = 0;
-      const MAX_NETWORK_RECOVERIES = 2;
-      const MAX_MEDIA_RECOVERIES   = 2;
+      // ── Two-attempt strategy ──────────────────────────────────────────────
+      // Attempt 1: proxy_url — server-side proxy with Referer spoofing
+      //   Works when the CDN allows our cPanel IP
+      // Attempt 2: raw_url — direct browser fetch with xhrSetup Origin header
+      //   Works when the CDN blocks datacenter IPs but allows residential IPs
+      let triedDirect = false;
 
-      this.hls=new Hls({
-        enableWorker:true,
-        lowLatencyMode:true,
-        maxMaxBufferLength:60,
-        // Retry settings: each retry waits fragLoadingRetryDelay ms
-        fragLoadingMaxRetry:4,
-        manifestLoadingMaxRetry:3,
-        levelLoadingMaxRetry:3,
-        fragLoadingRetryDelay:1500,
-        manifestLoadingRetryDelay:1500,
-        levelLoadingRetryDelay:1500,
-      });
-      this.hls.loadSource(streamUrl);
-      this.hls.attachMedia(this.player);
-
-      this.hls.on(Hls.Events.MANIFEST_PARSED,()=>{
+      const onManifest = () => {
         this.hideSpinner();
         this.player.play().catch(e=>{
-          // Autoplay blocked — unmute and retry (browser policy)
-          if(e.name==='NotAllowedError'){
-            this.player.muted=true;
-            this.player.play().catch(()=>{});
-          }
+          if(e.name==='NotAllowedError'){ this.player.muted=true; this.player.play().catch(()=>{}); }
         });
         this.setBadge(srv.name);
-      });
+      };
 
-      this.hls.on(Hls.Events.ERROR,(ev,data)=>{
-        if(!data.fatal) return; // non-fatal: HLS.js handles internally
-
-        console.error('[HLS fatal]',data.type,data.details,'server:',srv.name);
-
-        if(data.type===Hls.ErrorTypes.NETWORK_ERROR){
-          // NETWORK_ERROR: retry up to MAX_NETWORK_RECOVERIES times,
-          // then give up and auto-switch. Never call startLoad() forever.
-          if(networkRecoveries < MAX_NETWORK_RECOVERIES){
-            networkRecoveries++;
-            console.warn('[HLS] network recovery attempt',networkRecoveries);
-            this.hls.startLoad();
-          } else {
-            // Exhausted retries — this server is dead, move on
-            this.destroyHls();
-            this.failedServers.add(idx);
-            this.markFailed(idx);
-            this.showError(srv.name+' unavailable','Trying next server…',true);
-          }
-        } else if(data.type===Hls.ErrorTypes.MEDIA_ERROR){
-          if(mediaRecoveries < MAX_MEDIA_RECOVERIES){
-            mediaRecoveries++;
-            console.warn('[HLS] media recovery attempt',mediaRecoveries);
-            this.hls.recoverMediaError();
-          } else {
-            this.destroyHls();
-            this.failedServers.add(idx);
-            this.markFailed(idx);
-            this.showError(srv.name+' media error','Trying next server…',true);
-          }
-        } else {
-          // OTHER fatal (e.g. KEY_SYSTEM_ERROR, BUFFER_ERROR) — switch immediately
-          this.destroyHls();
-          this.failedServers.add(idx);
-          this.markFailed(idx);
-          this.showError(srv.name+' failed','Trying next server…',true);
-        }
-      });
-
-    }else if(this.player.canPlayType('application/vnd.apple.mpegurl')){
-      // Native HLS (iOS Safari)
-      this.player.src=streamUrl;
-      this.player.addEventListener('loadedmetadata',()=>{
-        this.hideSpinner();
-        this.player.play().catch(e=>{});
-        this.setBadge(srv.name);
-      },{once:true});
-      this.player.addEventListener('error',()=>{
+      const onDirectFatal = () => {
+        this.destroyHls();
         this.failedServers.add(idx);
         this.markFailed(idx);
-        this.showError(srv.name+' failed','Auto-switching to next server...',true);
+        this.showError(srv.name+' unavailable','Trying next server…',true);
+      };
+
+      const onProxyFatal = () => {
+        this.destroyHls();
+        if(!triedDirect && srv.raw_url){
+          triedDirect = true;
+          console.warn('[player] proxy failed — retrying direct:', srv.raw_url);
+          this.showSpinner('Retrying '+srv.name+' (direct)…', srv.group||'');
+          this.hls = this._makeHls(srv.raw_url, onDirectFatal);
+          this.hls.on(Hls.Events.MANIFEST_PARSED, onManifest);
+        } else {
+          onDirectFatal();
+        }
+      };
+
+      this.hls = this._makeHls(srv.proxy_url, onProxyFatal);
+      this.hls.on(Hls.Events.MANIFEST_PARSED, onManifest);
+
+    }else if(this.player.canPlayType('application/vnd.apple.mpegurl')){
+      // Native HLS (iOS Safari) — try proxy first, fall back to raw
+      const tryRaw = () => {
+        if(srv.raw_url){
+          this.player.src = srv.raw_url;
+          this.player.load();
+          this.player.addEventListener('loadedmetadata',()=>{
+            this.hideSpinner(); this.player.play().catch(()=>{}); this.setBadge(srv.name);
+          },{once:true});
+          this.player.addEventListener('error',()=>{
+            this.failedServers.add(idx); this.markFailed(idx);
+            this.showError(srv.name+' failed','Trying next server…',true);
+          },{once:true});
+        } else {
+          this.failedServers.add(idx); this.markFailed(idx);
+          this.showError(srv.name+' failed','Trying next server…',true);
+        }
+      };
+      this.player.src = srv.proxy_url;
+      this.player.addEventListener('loadedmetadata',()=>{
+        this.hideSpinner(); this.player.play().catch(()=>{}); this.setBadge(srv.name);
       },{once:true});
+      this.player.addEventListener('error', tryRaw, {once:true});
     }else{
-      this.showError('Your browser does not support HLS','Try using Chrome, Safari, or Edge');
+      this.showError('Your browser does not support HLS','Try Chrome, Safari, or Edge');
     }
   },
 
