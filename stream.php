@@ -1,23 +1,19 @@
 <?php
 /**
- * stream.php — Live Stream Extraction + Validation API
+ * stream.php — Live Stream Extraction API
  *
- * Fetches fifalive.click on every request and validates each server URL
- * by making a quick HEAD request to ensure it returns a valid M3U8 response.
- * 
- * Skips:
- *  - HTTP 429 (rate limited)
- *  - HTTP 403 (forbidden / blocked)
- *  - Non-M3U8 responses
- *  - Timeouts / connection failures
+ * Fetches fifalive.click on every request, parses the M3U8 playlist,
+ * and returns ALL server URLs instantly — NO per-server validation.
  *
- * Response (always HTTP 200 so fetch() never throws):
- *   { "ok": true,  "source": "fifalive", "servers": [...validated...] }
- *   { "ok": true,  "source": "fallback", "servers": [test_stream] }
+ * Validation was the root cause of the infinite spinner:
+ *   - 4 sequential cURL requests x ~8s each = 32s total
+ *   - cPanel kills PHP at max_execution_time (usually 30s)
+ *   - fetch() in browser times out -> falls back to dead DB channels
+ *
+ * The browser / HLS.js handles validation naturally by trying each server.
  */
 
-// Generous time limit for validation requests
-set_time_limit(45);
+set_time_limit(20);
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -36,7 +32,7 @@ $FALLBACK = [
 ];
 
 // ── Fix malformed URLs from the source M3U8 ──────────────────────────────────
-// e.g. workers*dev → workers.dev
+// e.g. workers*dev -> workers.dev (fifalive sometimes has this typo)
 function sanitiseUrl(string $raw): string {
     $url = trim($raw);
     if (preg_match('@^(https?://)([^/?#]+)(.*)$@i', $url, $m)) {
@@ -47,11 +43,11 @@ function sanitiseUrl(string $raw): string {
 
 // ── Detect M3U8 response ─────────────────────────────────────────────────────
 function isM3u8(string $body, string $ctype): bool {
-    if (stripos($ctype, 'mpegurl') !== false)        return true;
-    if (stripos($ctype, 'vnd.apple') !== false)      return true;
+    if (stripos($ctype, 'mpegurl')   !== false) return true;
+    if (stripos($ctype, 'vnd.apple') !== false) return true;
     $t = ltrim($body);
-    if (stripos($t, '#EXTM3U')  === 0)               return true;
-    if (stripos($t, '#EXT-X-')  === 0)               return true;
+    if (stripos($t, '#EXTM3U') === 0) return true;
+    if (stripos($t, '#EXT-X-') === 0) return true;
     return false;
 }
 
@@ -69,9 +65,9 @@ function parseMaster(string $body): array {
             $name  = '';
             $group = 'Live';
             $logo  = '';
-            if (preg_match('/tvg-name=["\']([^"\']+)["\']/i', $line, $m))    $name  = $m[1];
+            if (preg_match('/tvg-name=["\']([^"\']+)["\']/i',    $line, $m)) $name  = $m[1];
             if (preg_match('/group-title=["\']([^"\']+)["\']/i', $line, $m)) $group = $m[1];
-            if (preg_match('/tvg-logo=["\']([^"\']+)["\']/i', $line, $m))    $logo  = $m[1];
+            if (preg_match('/tvg-logo=["\']([^"\']+)["\']/i',    $line, $m)) $logo  = $m[1];
             if ($name === '' && preg_match('/,(.+)$/', $line, $m))           $name  = trim($m[1]);
             $pending = [
                 'name'  => $name  ?: ('Server ' . (count($servers) + 1)),
@@ -81,7 +77,7 @@ function parseMaster(string $body): array {
             continue;
         }
 
-        if ($line[0] !== '#') {
+        if (isset($line[0]) && $line[0] !== '#') {
             $clean = sanitiseUrl($line);
             if (filter_var($clean, FILTER_VALIDATE_URL)) {
                 $servers[] = [
@@ -99,68 +95,6 @@ function parseMaster(string $body): array {
     return $servers;
 }
 
-// ── Validate a single server URL ─────────────────────────────────────────────
-// Returns: ['ok' => bool, 'reason' => string]
-function validateServer(string $url): array {
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_MAXREDIRS      => 5,
-        CURLOPT_NOBODY         => false,  // GET request to fetch body
-        CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_SSL_VERIFYHOST => 0,
-        CURLOPT_CONNECTTIMEOUT => 5,
-        CURLOPT_TIMEOUT        => 8,
-        CURLOPT_ENCODING       => '',
-        CURLOPT_HTTPHEADER     => [
-            'Accept: application/vnd.apple.mpegurl, application/x-mpegurl, */*',
-            'Referer: https://fifalive.click/',
-            'Origin: https://fifalive.click',
-        ],
-    ]);
-
-    $body = curl_exec($ch);
-    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $type = (string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
-    $err  = curl_error($ch);
-    curl_close($ch);
-
-    // Connection failure
-    if ($body === false || $code === 0) {
-        return ['ok' => false, 'reason' => $err ?: 'Connection failed'];
-    }
-
-    // Rate limited
-    if ($code === 429) {
-        return ['ok' => false, 'reason' => 'Rate limited (429)'];
-    }
-
-    // Forbidden / blocked
-    if ($code === 403) {
-        return ['ok' => false, 'reason' => 'Forbidden (403)'];
-    }
-
-    // Server error
-    if ($code >= 500) {
-        return ['ok' => false, 'reason' => "Server error ($code)"];
-    }
-
-    // Not 2xx
-    if ($code < 200 || $code >= 300) {
-        return ['ok' => false, 'reason' => "HTTP $code"];
-    }
-
-    // Check if response is M3U8
-    if (!isM3u8($body, $type)) {
-        return ['ok' => false, 'reason' => 'Not M3U8 (got ' . $type . ')'];
-    }
-
-    // Success
-    return ['ok' => true, 'reason' => 'OK'];
-}
-
 // ── Fetch fifalive.click ─────────────────────────────────────────────────────
 $ch = curl_init('https://fifalive.click/');
 curl_setopt_array($ch, [
@@ -171,7 +105,7 @@ curl_setopt_array($ch, [
     CURLOPT_SSL_VERIFYPEER => false,
     CURLOPT_SSL_VERIFYHOST => 0,
     CURLOPT_CONNECTTIMEOUT => 8,
-    CURLOPT_TIMEOUT        => 12,   // hard cap — must leave time for PHP to respond
+    CURLOPT_TIMEOUT        => 12,
     CURLOPT_ENCODING       => '',
     CURLOPT_HTTPHEADER     => [
         'Accept: application/vnd.apple.mpegurl, application/x-mpegurl, */*',
@@ -190,40 +124,18 @@ $curlErr = curl_error($ch);
 curl_close($ch);
 
 // ── Build response ────────────────────────────────────────────────────────────
-$errors = [];
+$errors  = [];
+$servers = [];
 
 if ($body === false || $body === '') {
-    $errors[] = 'cURL failed: ' . $curlErr;
+    $errors[] = 'cURL failed: ' . ($curlErr ?: 'empty response');
 } elseif ($code < 200 || $code >= 300) {
     $errors[] = "fifalive.click returned HTTP $code";
-    $body = '';
 } elseif (!isM3u8($body, $ctype)) {
-    // Got HTML — paywall or redirect
-    $errors[] = 'fifalive.click returned non-M3U8 (CT=' . $ctype . '). Possible paywall.';
-    $body = '';
-}
-
-if ($body !== false && $body !== '') {
-    $parsed = parseMaster($body);
-    
-    // Validate each server in parallel with curl_multi
-    $validServers = [];
-    $validationErrors = [];
-    
-    foreach ($parsed as $srv) {
-        $result = validateServer($srv['raw_url']);
-        
-        if ($result['ok']) {
-            $validServers[] = $srv;
-        } else {
-            $validationErrors[] = $srv['name'] . ': ' . $result['reason'];
-        }
-    }
-    
-    $servers = $validServers;
-    $errors = array_merge($errors, $validationErrors);
+    $errors[] = 'fifalive.click returned non-M3U8 (CT=' . $ctype . ') — possible paywall/captcha';
 } else {
-    $servers = [];
+    // Parse and return all servers immediately — no per-server validation
+    $servers = parseMaster($body);
 }
 
 // Always append fallback at the end
@@ -232,7 +144,7 @@ $servers[] = $FALLBACK;
 echo json_encode([
     'ok'      => true,
     'source'  => count($servers) > 1 ? 'fifalive' : 'fallback',
-    'count'   => max(0, count($servers) - 1), // live count excludes fallback
+    'count'   => max(0, count($servers) - 1),
     'servers' => $servers,
     'errors'  => $errors,
 ], JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
