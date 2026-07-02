@@ -158,7 +158,12 @@ body{
 
 /* ── Server selector area ─────────────────────────────────────── */
 #server-area{padding:0 12px 8px}
-#server-label{font-size:10px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
+#server-label-row{
+  display:flex;align-items:baseline;justify-content:space-between;
+  margin-bottom:8px;
+}
+#server-label{font-size:10px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:.08em}
+#cache-age{font-size:9px;color:#334155;font-weight:500}
 #server-scroll{
   display:flex;gap:8px;overflow-x:auto;
   padding:2px 0 8px;scroll-snap-type:x mandatory;
@@ -409,7 +414,10 @@ body{
 
       <!-- Server selector -->
       <div id="server-area">
-        <div id="server-label">Select Server</div>
+        <div id="server-label-row">
+          <div id="server-label">Select Server</div>
+          <div id="cache-age"></div>
+        </div>
         <div id="server-scroll"></div>
       </div>
 
@@ -519,6 +527,7 @@ const TCTV = window.TCTV = {
   errSub: $('err-sub'),
   autoSwitch: $('auto-switch'),
   serverScroll: $('server-scroll'),
+  cacheAge:     $('cache-age'),
   srcBadge: $('src-badge'),
   warnBar: $('warn-bar'),
   warnText: $('warn-text'),
@@ -802,6 +811,16 @@ const TCTV = window.TCTV = {
 
       this.buildPills();
       this.loadServer(0);  // always the first LIVE server
+
+      // Show cache age so users know how fresh the server list is
+      if(data.cached && data.cached_age > 0){
+        const mins = Math.round(data.cached_age / 60);
+        this.cacheAge.textContent = mins < 1
+          ? 'updated just now'
+          : `updated ${mins}m ago`;
+      } else {
+        this.cacheAge.textContent = 'live';
+      }
 
       if(data.warning) this.setWarning(data.warning);
 

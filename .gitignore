@@ -1,0 +1,6 @@
+# Cache file written by stream.php — regenerated automatically, never commit
+links_cache.json
+links_cache.json.tmp
+
+# XAMPP / local environment
+*.log
