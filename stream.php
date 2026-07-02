@@ -174,6 +174,10 @@ function rewriteCachedM3u8(string $body, string $baseUrl): string {
     return implode("\n", $lines);
 }
 
+/*
+ * DUPLICATE REMOVED — already defined above
+ */
+
 function isM3u8(string $body, string $ctype): bool {
     if (stripos($ctype, 'mpegurl')   !== false) return true;
     if (stripos($ctype, 'vnd.apple') !== false) return true;

@@ -70,6 +70,18 @@ if (preg_match('~^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.)~', $tar
     http_response_code(403); die('Private address blocked.');
 }
 
+// ── TikTok CDN segments: redirect to browser ─────────────────────────────────
+// TikTok CDN allows residential browser IPs but blocks datacenter IPs.
+// When a segment URL from tiktokcdn.com is requested, we send a 302 redirect
+// so the browser fetches it directly with its own residential IP.
+// This works because HLS.js follows 302 redirects automatically for segments,
+// and TikTok CDN has no CORS restrictions on media segments.
+if (str_contains($targetHost, 'tiktokcdn.com') || str_contains($targetHost, 'tiktok.com')) {
+    header('Location: ' . $targetUrl, true, 302);
+    header('Access-Control-Allow-Origin: *');
+    exit;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
