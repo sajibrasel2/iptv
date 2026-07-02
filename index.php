@@ -25,7 +25,7 @@ try {
     $autoplayUrl = 'https://fifalive.click/';
 }
 $conn = null;
-$initialPlayerSrc = $autoplayUrl;
+$initialPlayerSrc = 'proxy.php?url=' . rawurlencode($autoplayUrl);
 ?>
 <!DOCTYPE html>
 <html lang="en" class="dark">
@@ -212,10 +212,64 @@ $initialPlayerSrc = $autoplayUrl;
         window.switchServer = (streamUrl, button) => {
             const iframe = document.getElementById('main-player');
             if (!iframe || !streamUrl) return;
-            iframe.src = streamUrl;
+            iframe.src = 'proxy.php?url=' + encodeURIComponent(streamUrl);
             document.querySelectorAll('#server-list .server-pill').forEach(el => el.classList.remove('active'));
             if (button) button.classList.add('active');
         };
+
+        function observeIframeDOM() {
+            const iframe = document.getElementById('main-player');
+            if (!iframe) return;
+            
+            iframe.addEventListener('load', () => {
+                try {
+                    const doc = iframe.contentDocument || iframe.contentWindow.document;
+                    if (!doc || !doc.body) return;
+                    
+                    const selectors = [
+                        '#socialWidget', '.social-box', '.social-btn', '.close-social',
+                        '#sticky-header-notice', '.sticky-notice',
+                        '.marquee-wrapper', '.marquee-text', '.scrolling-marquee', '.marquee-container', '.marquee',
+                        '#fbLockerBtn', '.locker-fb-btn', '#lockerCountdown', '.countdown-text', '#countNumber',
+                        '.facebook-follow', '.telegram-follow', '#telegram-bar',
+                        '.promo-text', '.overlay', '.popup', '.announcement-bar', '.top-bar',
+                        '.follow-container', '.social-buttons'
+                    ];
+
+                    const clean = () => {
+                        selectors.forEach(sel => {
+                            doc.querySelectorAll(sel).forEach(el => {
+                                el.style.setProperty('display', 'none', 'important');
+                                try { el.remove(); } catch(e) {}
+                            });
+                        });
+                        
+                        doc.querySelectorAll('div, a').forEach(el => {
+                            const text = el.textContent || '';
+                            if (text.includes('Follow on Facebook') || text.includes('Follow on Telegram') || text.includes('খেলা শুরু আগে')) {
+                                el.style.setProperty('display', 'none', 'important');
+                                try { el.remove(); } catch(e) {}
+                            }
+                        });
+                    };
+
+                    clean();
+
+                    const observer = new MutationObserver((mutations) => {
+                        clean();
+                    });
+                    
+                    observer.observe(doc.documentElement, {
+                        childList: true,
+                        subtree: true
+                    });
+                } catch (err) {
+                    console.warn('Parent-side iframe observation failed:', err);
+                }
+            });
+        }
+        
+        document.addEventListener('DOMContentLoaded', observeIframeDOM);
     </script>
 </body>
 </html>
