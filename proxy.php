@@ -193,12 +193,15 @@ if ($clientIp !== '') {
 $ch = curl_init($targetUrl);
 curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_FOLLOWLOCATION => true,
+    CURLOPT_FOLLOWLOCATION => true,          // follow 301/302 redirects
     CURLOPT_MAXREDIRS      => 8,
-    CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+    // Mobile Safari UA — some CDNs (ToffeeLive, Workers) serve different
+    // responses or skip bot-detection for mobile browser user agents
+    CURLOPT_USERAGENT      => 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
     CURLOPT_SSL_VERIFYPEER => false,
     CURLOPT_SSL_VERIFYHOST => 0,
-    CURLOPT_CONNECTTIMEOUT => 10,
+    CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4,  // force IPv4 — broken IPv6 on some cPanel hosts causes timeouts
+    CURLOPT_CONNECTTIMEOUT => 15,            // raised from 10s — gives slow CDNs time to respond
     CURLOPT_TIMEOUT        => 45,
     CURLOPT_ENCODING       => '',
     CURLOPT_HTTPHEADER     => $headers,
