@@ -2,115 +2,124 @@
 /**
  * proxy.php — Pure HLS Media Proxy
  *
- * ONLY handles:
- *   1. M3U8 playlists  → rewrites all segment/key URLs to route through this proxy
- *   2. TS segments     → passes bytes straight through with correct Content-Type
- *   3. Encryption keys → passes bytes straight through
+ * Handles THREE content types only — no HTML, no iframes, no scraping:
+ *   1. M3U8 playlists  — rewrites every segment / key URL through this proxy
+ *   2. TS segments     — passes raw bytes with correct Content-Type
+ *   3. Encryption keys — passes raw bytes as application/octet-stream
  *
- * No HTML proxying. No page scraping. No iframes.
+ * SSRF protections:
+ *   - Allows only http / https schemes
+ *   - Blocks loopback and link-local addresses
+ *   - Blocks requests to the proxy's own host
  *
- * Usage:
- *   proxy.php?url=<encoded_url>&raw=true   (called by HLS.js for segments/playlists)
+ * Usage (always called with &raw=true from HLS.js):
+ *   proxy.php?url=<rawurlencode(absolute_url)>&raw=true
  */
 
+// ── CORS + cache headers ─────────────────────────────────────────────────────
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, HEAD, OPTIONS');
+header('Access-Control-Allow-Headers: Range, Origin, Accept, Accept-Language');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: *');
+header('Expires: 0');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
     exit;
 }
 
-// ---------------------------------------------------------------------------
-// Validate & sanitise the ?url= parameter
-// ---------------------------------------------------------------------------
-$url = isset($_GET['url']) ? trim($_GET['url']) : '';
-if ($url === '') {
+// ── Validate ?url= ───────────────────────────────────────────────────────────
+$rawInput  = isset($_GET['url']) ? trim($_GET['url']) : '';
+if ($rawInput === '') {
     http_response_code(400);
-    echo 'Missing url parameter.';
-    exit;
+    die('Missing url parameter.');
 }
 
-$targetUrl = filter_var($url, FILTER_VALIDATE_URL);
+$targetUrl = filter_var($rawInput, FILTER_VALIDATE_URL);
 if ($targetUrl === false) {
     http_response_code(400);
-    echo 'Invalid url parameter.';
-    exit;
+    die('Invalid url parameter.');
 }
 
-$scheme = parse_url($targetUrl, PHP_URL_SCHEME);
+$scheme = strtolower(parse_url($targetUrl, PHP_URL_SCHEME) ?? '');
 if (!in_array($scheme, ['http', 'https'], true)) {
     http_response_code(400);
-    echo 'Only http/https URLs are allowed.';
-    exit;
+    die('Only http/https URLs allowed.');
 }
 
-$host = strtolower(parse_url($targetUrl, PHP_URL_HOST) ?? '');
-// Block SSRF to local/internal hosts
-$blocked = ['localhost', '127.0.0.1', '::1', '0.0.0.0', '169.254.169.254'];
-foreach ($blocked as $b) {
-    if ($host === $b || substr($host, -strlen('.' . $b)) === '.' . $b) {
-        http_response_code(403);
-        echo 'Blocked.';
-        exit;
-    }
+// SSRF block-list
+$targetHost = strtolower(parse_url($targetUrl, PHP_URL_HOST) ?? '');
+$ownHost    = strtolower($_SERVER['HTTP_HOST'] ?? '');
+$ssrfBlock  = [
+    'localhost', '127.0.0.1', '::1', '0.0.0.0',
+    '169.254.169.254',   // AWS metadata
+    '100.100.100.200',   // Alibaba metadata
+    'metadata.google.internal',
+];
+foreach ($ssrfBlock as $b) {
+    if ($targetHost === $b) { http_response_code(403); die('Blocked.'); }
+}
+// Block requests back to ourselves
+if ($targetHost !== '' && $targetHost === $ownHost) {
+    http_response_code(403);
+    die('Self-request blocked.');
+}
+// Block RFC-1918 / link-local
+if (preg_match('/^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.)/', $targetHost)) {
+    http_response_code(403);
+    die('Private address blocked.');
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Build an absolute URL from a (possibly relative) URL and the base URL
- * of the document that contains it.
+ * Resolve a potentially relative $href against $baseUrl.
  */
-function makeAbsolute(string $href, string $baseUrl): string {
-    if (stripos($href, 'http://') === 0 || stripos($href, 'https://') === 0) {
-        return $href;
-    }
+function absoluteUrl(string $href, string $baseUrl): string {
+    if (preg_match('#^https?://#i', $href)) return $href;
+
     $p      = parse_url($baseUrl);
     $scheme = $p['scheme'] ?? 'https';
     $host   = $p['host']   ?? '';
     $path   = $p['path']   ?? '/';
 
-    if ($href[0] === '/') {
-        return $scheme . '://' . $host . $href;
-    }
+    // Scheme-relative
+    if (substr($href, 0, 2) === '//') return $scheme . ':' . $href;
+    // Root-relative
+    if ($href[0] === '/') return $scheme . '://' . $host . $href;
 
-    // Relative path — resolve against the directory of $baseUrl
+    // Relative — resolve against directory of base path
     $dir = (substr($path, -1) === '/' || strpos(basename($path), '.') === false)
         ? rtrim($path, '/') . '/'
-        : dirname($path) . '/';
+        : rtrim(dirname($path), '/') . '/';
 
-    return $scheme . '://' . $host . $dir . $href;
+    return $scheme . '://' . $host . $dir . ltrim($href, './');
 }
 
 /**
- * Rewrite every line in an M3U8 so all URLs route back through this proxy.
+ * Rewrite every URL in an M3U8 playlist to pass through this proxy.
  */
-function rewriteM3u8(string $content, string $baseUrl): string {
-    $lines = preg_split('/\r?\n/', $content);
+function rewriteM3u8(string $body, string $baseUrl): string {
+    $lines = preg_split('/\r?\n/', $body);
 
     foreach ($lines as $i => $line) {
-        $trimmed = trim($line);
-        if ($trimmed === '') continue;
+        $t = trim($line);
+        if ($t === '') continue;
 
-        if ($trimmed[0] !== '#') {
-            // Segment / sub-playlist URL
-            $abs         = makeAbsolute($trimmed, $baseUrl);
-            $lines[$i]   = 'proxy.php?url=' . rawurlencode($abs) . '&raw=true';
+        if ($t[0] !== '#') {
+            // Segment line (TS, MP4, fMP4, sub-playlist)
+            $abs       = absoluteUrl($t, $baseUrl);
+            $lines[$i] = 'proxy.php?url=' . rawurlencode($abs) . '&raw=true';
         } else {
-            // Tag line — rewrite URI="..." attributes (keys, maps, etc.)
+            // Tag line — rewrite URI="..." attributes (EXT-X-KEY, EXT-X-MAP, etc.)
             $lines[$i] = preg_replace_callback(
                 '/URI=["\']([^"\']+)["\']/i',
                 function (array $m) use ($baseUrl): string {
-                    $abs = makeAbsolute($m[1], $baseUrl);
+                    $abs = absoluteUrl($m[1], $baseUrl);
                     return 'URI="proxy.php?url=' . rawurlencode($abs) . '&raw=true"';
                 },
-                $trimmed
+                $t
             );
         }
     }
@@ -119,86 +128,119 @@ function rewriteM3u8(string $content, string $baseUrl): string {
 }
 
 /**
- * Create a cURL handle pre-configured to look like a real browser request.
- * $referer: the page that would logically be requesting this resource.
+ * Build a cURL handle with spoofed browser headers.
+ * $sourceHint: the logical origin site (Referer / Origin).
  */
-function makeCurl(string $targetUrl, string $referer = 'https://fifalive.click/', bool $isMedia = true) {
-    $ch = curl_init($targetUrl);
+function buildCurl(string $url, string $sourceHint = 'https://fifalive.click/'): \CurlHandle|false {
+    // Derive Origin from sourceHint
+    $p      = parse_url($sourceHint);
+    $origin = ($p['scheme'] ?? 'https') . '://' . ($p['host'] ?? '');
+
+    $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_FOLLOWLOCATION => true,
         CURLOPT_MAXREDIRS      => 8,
-        CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+        CURLOPT_USERAGENT      =>
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' .
+            '(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
         CURLOPT_SSL_VERIFYPEER => false,
         CURLOPT_SSL_VERIFYHOST => 0,
         CURLOPT_CONNECTTIMEOUT => 10,
-        CURLOPT_TIMEOUT        => ($isMedia ? 30 : 15),
-        CURLOPT_ENCODING       => '',          // Accept-Encoding: identity,gzip,deflate
+        CURLOPT_TIMEOUT        => 30,
+        CURLOPT_ENCODING       => '',      // gzip / deflate / identity all accepted
         CURLOPT_HTTPHEADER     => [
             'Accept: application/vnd.apple.mpegurl, application/x-mpegurl, video/MP2T, */*',
             'Accept-Language: en-US,en;q=0.9',
-            'Referer: ' . $referer,
-            'Origin: '  . rtrim(preg_replace('#(https?://[^/]+).*#', '$1', $referer), '/'),
+            'Referer: '  . $sourceHint,
+            'Origin: '   . $origin,
             'Connection: keep-alive',
         ],
     ]);
     return $ch;
 }
 
-// ---------------------------------------------------------------------------
-// Main — fetch and forward the requested resource
-// ---------------------------------------------------------------------------
-$ch      = makeCurl($targetUrl);
-$content = curl_exec($ch);
-$status  = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-$ctype   = curl_getinfo($ch, CURLINFO_CONTENT_TYPE) ?: '';
-$curlErr = curl_error($ch);
-$finalUrl = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL) ?: $targetUrl; // may differ after redirects
+/**
+ * Pick a sensible Referer based on the target host.
+ */
+function inferReferer(string $url): string {
+    $host = strtolower(parse_url($url, PHP_URL_HOST) ?? '');
+
+    $map = [
+        'toffeelive.com'        => 'https://toffeelive.com/',
+        'prod-cdn01-live'       => 'https://toffeelive.com/',
+        'nextgoal.workers.dev'  => 'https://fifalive.click/',
+        'cinecdn.workers.dev'   => 'https://fifalive.click/',
+        'smtahmidx.workers.dev' => 'https://fifalive.click/',
+        'ilovetoplay.xyz'       => 'https://ilovetoplay.xyz/',
+        'eplayer.to'            => 'https://ilovetoplay.xyz/',
+        'dlhd'                  => 'https://ilovetoplay.xyz/',
+    ];
+
+    foreach ($map as $needle => $referer) {
+        if (str_contains($host, $needle)) return $referer;
+    }
+
+    return 'https://fifalive.click/';
+}
+
+// ── Fetch the target URL ─────────────────────────────────────────────────────
+$referer  = inferReferer($targetUrl);
+$ch       = buildCurl($targetUrl, $referer);
+$content  = curl_exec($ch);
+$httpCode = (int)  curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$ctype    = (string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+$curlErr  = curl_error($ch);
+$finalUrl = (string) curl_getinfo($ch, CURLINFO_EFFECTIVE_URL) ?: $targetUrl;
 curl_close($ch);
 
+// ── Error handling ───────────────────────────────────────────────────────────
 if ($content === false) {
     http_response_code(502);
-    echo 'Upstream fetch failed: ' . htmlspecialchars($curlErr);
-    exit;
+    die('Upstream fetch failed: ' . htmlspecialchars($curlErr));
 }
 
-if ($status >= 400) {
-    http_response_code($status);
-    echo 'Upstream returned HTTP ' . $status;
-    exit;
+if ($httpCode >= 400) {
+    http_response_code($httpCode);
+    die('Upstream HTTP ' . $httpCode);
 }
 
-// ---------------------------------------------------------------------------
-// Detect content type: M3U8 vs binary media
-// ---------------------------------------------------------------------------
+// ── Detect whether the response is M3U8 ────────────────────────────────────
 $looksLikeM3u8 =
-    stripos($ctype, 'mpegurl') !== false ||
+    stripos($ctype, 'mpegurl')             !== false ||
     stripos($ctype, 'application/vnd.apple') !== false ||
+    // Body starts with M3U8 magic
     (is_string($content) && stripos(ltrim($content), '#EXTM3U') === 0) ||
-    // URL itself hints at M3U8
-    preg_match('/\.m3u8(\?|$)/i', $finalUrl);
+    // URL path ends with .m3u8 (after stripping query string)
+    preg_match('/\.m3u8(\?|$)/i', parse_url($finalUrl, PHP_URL_PATH) ?? '');
 
 if ($looksLikeM3u8) {
     $rewritten = rewriteM3u8($content, $finalUrl);
     header('Content-Type: application/vnd.apple.mpegurl; charset=utf-8');
-    http_response_code($status ?: 200);
+    http_response_code($httpCode ?: 200);
     echo $rewritten;
     exit;
 }
 
-// Binary media (TS segment, encryption key, etc.)
-// Preserve the upstream Content-Type; fall back to sensible defaults
-if ($ctype === '' || stripos($ctype, 'text/html') !== false) {
-    // A TS segment misidentified as HTML, or no type — detect by URL
-    if (preg_match('/\.(ts|aac|mp4|m4s|m4v|fmp4)(\?|$)/i', $finalUrl)) {
-        $ctype = 'video/MP2T';
-    } elseif (preg_match('/\.(key|bin)(\?|$)/i', $finalUrl)) {
-        $ctype = 'application/octet-stream';
-    } else {
-        $ctype = 'application/octet-stream';
-    }
+// ── Binary media pass-through ────────────────────────────────────────────────
+// Some CDNs return TS/AAC/MP4 with wrong or missing Content-Type.
+// Detect by URL extension.
+if ($ctype === '' || stripos($ctype, 'text/html') !== false || stripos($ctype, 'octet-stream') !== false) {
+    $ext = strtolower(pathinfo(parse_url($finalUrl, PHP_URL_PATH) ?? '', PATHINFO_EXTENSION));
+    $extMap = [
+        'ts'   => 'video/MP2T',
+        'aac'  => 'audio/aac',
+        'mp4'  => 'video/mp4',
+        'm4s'  => 'video/iso.segment',
+        'fmp4' => 'video/mp4',
+        'm4v'  => 'video/mp4',
+        'key'  => 'application/octet-stream',
+        'bin'  => 'application/octet-stream',
+        'mp3'  => 'audio/mpeg',
+    ];
+    $ctype = $extMap[$ext] ?? 'application/octet-stream';
 }
 
 header('Content-Type: ' . $ctype);
-http_response_code($status ?: 200);
+http_response_code($httpCode ?: 200);
 echo $content;

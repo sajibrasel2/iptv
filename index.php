@@ -1,417 +1,760 @@
 <?php
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
-
 require_once 'config.php';
 
-// Pull any custom channels from the DB (used for the server-switcher pills)
 $customChannels = [];
 try {
-    $conn = new PDO(
+    $pdo = new PDO(
         "mysql:host={$servername};dbname={$dbname};charset={$charset}",
-        $username,
-        $password,
-        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+        $username, $password,
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
     );
-    $stmt = $conn->query(
-        "SELECT id, display_name, target_url FROM custom_channels
-         WHERE target_url != ''
-         ORDER BY id ASC"
-    );
-    $customChannels = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    $conn = null;
-} catch (PDOException $e) {
-    $conn = null;
-}
+    $stmt = $pdo->query("SELECT id, display_name, target_url FROM custom_channels WHERE target_url != '' ORDER BY id ASC");
+    $customChannels = $stmt->fetchAll();
+    $pdo = null;
+} catch (PDOException $e) { $pdo = null; }
+
+$customChannelsJson = json_encode(array_map(fn($ch) => [
+    'name'      => $ch['display_name'] ?: 'Channel',
+    'group'     => 'Custom',
+    'logo'      => '',
+    'raw_url'   => $ch['target_url'],
+    'proxy_url' => 'proxy.php?url=' . rawurlencode($ch['target_url']) . '&raw=true',
+], $customChannels), JSON_UNESCAPED_SLASHES);
 ?>
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#0f172a">
-    <title>Tech &amp; Click TV</title>
-    <link rel="manifest" href="manifest.json">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0a0e1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Tech &amp; Click TV — Live Sports</title>
+<link rel="manifest" href="manifest.json">
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js"></script>
+<style>
+/* ── Reset & Base ─────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{height:100%;height:-webkit-fill-available}
+body{
+  min-height:100vh;min-height:-webkit-fill-available;
+  background:#0a0e1a;color:#e2e8f0;
+  font-family:'Inter',system-ui,sans-serif;
+  -webkit-tap-highlight-color:transparent;
+  overscroll-behavior:none;overflow:hidden;
+}
+::-webkit-scrollbar{width:0;background:transparent}
 
-    <!-- HLS.js — the only third-party script we need -->
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js"></script>
+/* ── Layout shell ─────────────────────────────────────────────── */
+#app{
+  display:flex;flex-direction:column;
+  height:100vh;height:100dvh;
+  max-width:480px;margin:0 auto;
+  position:relative;overflow:hidden;
+  background:linear-gradient(180deg,#0d1220 0%,#0a0e1a 100%);
+  border-left:1px solid rgba(255,255,255,.04);
+  border-right:1px solid rgba(255,255,255,.04);
+}
 
-    <!-- Tailwind (utility-only, no custom JS framework) -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    animation: { 'fade-in': 'fadeIn .4s ease-out forwards' },
-                    keyframes:  { fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } } }
-                }
-            }
-        };
-    </script>
+/* ── Header ───────────────────────────────────────────────────── */
+#hdr{
+  flex-shrink:0;padding:14px 18px 12px;
+  display:flex;align-items:center;justify-content:space-between;
+  background:rgba(10,14,26,.92);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border-bottom:1px solid rgba(255,255,255,.06);
+  position:relative;z-index:50;
+}
+#hdr-logo{height:36px;object-fit:contain}
+#live-badge{
+  display:flex;align-items:center;gap:6px;
+  background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);
+  border-radius:20px;padding:4px 10px;
+}
+.live-dot{
+  width:7px;height:7px;border-radius:50%;background:#ef4444;
+  animation:livePulse 1.4s ease-in-out infinite;
+}
+@keyframes livePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
+#live-badge span{font-size:10px;font-weight:700;color:#ef4444;letter-spacing:.08em;text-transform:uppercase}
 
-    <style>
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 0; background: transparent; }
+/* ── Scrollable main area ─────────────────────────────────────── */
+#main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 0 80px}
 
-        html, body { height: 100%; overflow: hidden; }
-        body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
+/* ── Match info card ──────────────────────────────────────────── */
+#match-card{
+  margin:14px 12px 10px;padding:14px 16px;
+  background:linear-gradient(135deg,rgba(59,130,246,.12),rgba(99,102,241,.08));
+  border:1px solid rgba(96,165,250,.18);
+  border-radius:18px;
+  display:flex;align-items:center;gap:12px;
+  transition:opacity .3s;
+}
+#match-card.hidden{display:none}
+#match-icon{
+  width:42px;height:42px;border-radius:12px;object-fit:cover;flex-shrink:0;
+  background:rgba(59,130,246,.15);
+  display:flex;align-items:center;justify-content:center;font-size:20px;
+}
+#match-info{flex:1;min-width:0}
+#match-title{font-size:14px;font-weight:700;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#match-sub{font-size:11px;color:#64748b;margin-top:2px}
+#match-time{font-size:11px;font-weight:600;color:#38bdf8;margin-top:4px}
 
-        /* Glass nav */
-        #bottom-nav {
-            position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
-            width: 100%; max-width: 448px; z-index: 9999;
-            background: #1a1e29;
-            padding-bottom: env(safe-area-inset-bottom, 12px);
-        }
+/* ── Video card ───────────────────────────────────────────────── */
+#video-card{
+  margin:0 12px 10px;
+  border-radius:22px;overflow:hidden;
+  border:1px solid rgba(255,255,255,.07);
+  background:#000;
+  box-shadow:0 20px 60px rgba(0,0,0,.6);
+  position:relative;
+}
+#video-wrap{position:relative;width:100%;aspect-ratio:16/9;background:#000}
+#player{width:100%;height:100%;display:block;background:#000}
 
-        /* Server pills */
-        .server-pill {
-            white-space: nowrap;
-            padding: .65rem 1.2rem;
-            border: 1px solid rgba(148,163,184,.18);
-            border-radius: 9999px;
-            background: rgba(15,23,42,.8);
-            color: #cbd5e1;
-            font-size: .9rem;
-            font-weight: 600;
-            transition: all .2s ease;
-            cursor: pointer;
-        }
-        .server-pill:hover  { background: rgba(59,130,246,.12); border-color: rgba(96,165,250,.35); }
-        .server-pill.active {
-            background: linear-gradient(135deg, rgba(59,130,246,.95), rgba(99,102,241,.95));
-            color: #fff;
-            border-color: rgba(96,165,250,.85);
-            box-shadow: 0 0 0 1px rgba(96,165,250,.35), 0 20px 60px -20px rgba(59,130,246,.7);
-        }
+/* ── Overlay states (spinner / error) ────────────────────────── */
+.overlay{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  background:rgba(0,0,0,.85);z-index:5;gap:10px;
+  transition:opacity .25s;
+}
+.overlay.gone{opacity:0;pointer-events:none}
 
-        /* Pill scroll strip */
-        #server-list { scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
-        #server-list .server-pill { scroll-snap-align: start; }
+.spin-ring{
+  width:46px;height:46px;border-radius:50%;
+  border:3px solid rgba(255,255,255,.12);
+  border-top-color:#3b82f6;
+  animation:spin .75s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+#spin-label{font-size:12px;color:#64748b;font-weight:500}
+#spin-source{font-size:10px;color:#475569;margin-top:2px}
 
-        /* Video container */
-        #video-wrap {
-            position: relative;
-            width: 100%;
-            background: #000;
-        }
-        #live-video {
-            width: 100%;
-            height: 100%;
-            display: block;
-            background: #000;
-        }
+/* error overlay */
+#err-overlay{display:none}
+#err-overlay.visible{display:flex}
+#err-icon{font-size:36px;margin-bottom:2px}
+#err-msg{font-size:13px;color:#f87171;font-weight:600;text-align:center;max-width:220px}
+#err-sub{font-size:11px;color:#475569;text-align:center;max-width:240px;margin-top:3px}
+.err-actions{display:flex;gap:8px;margin-top:10px}
+.btn{
+  padding:8px 18px;border-radius:20px;border:none;
+  font-size:12px;font-weight:700;cursor:pointer;
+  transition:transform .1s,opacity .2s;
+}
+.btn:active{transform:scale(.95)}
+.btn-primary{background:linear-gradient(135deg,#3b82f6,#6366f1);color:#fff}
+.btn-ghost{background:rgba(255,255,255,.08);color:#94a3b8;border:1px solid rgba(255,255,255,.1)}
 
-        /* Spinner overlay */
-        #spinner {
-            position: absolute; inset: 0;
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
-            background: #000;
-            z-index: 10;
-            gap: 12px;
-        }
-        #spinner.hidden { display: none; }
-        .spin-ring {
-            width: 44px; height: 44px;
-            border: 3px solid rgba(255,255,255,.15);
-            border-top-color: #3b82f6;
-            border-radius: 50%;
-            animation: spin .8s linear infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
+/* ── Countdown to auto-switch ─────────────────────────────────── */
+#auto-switch{
+  font-size:10px;color:#64748b;text-align:center;
+  margin-top:6px;
+}
 
-        /* Error message */
-        #error-box {
-            position: absolute; inset: 0;
-            display: none; flex-direction: column;
-            align-items: center; justify-content: center;
-            background: #000;
-            z-index: 11;
-            padding: 1.5rem;
-            text-align: center;
-        }
-        #error-box.visible { display: flex; }
+/* ── Server selector area ─────────────────────────────────────── */
+#server-area{padding:0 12px 8px}
+#server-label{font-size:10px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
+#server-scroll{
+  display:flex;gap:8px;overflow-x:auto;
+  padding:2px 0 8px;scroll-snap-type:x mandatory;
+  -webkit-overflow-scrolling:touch;
+}
+.srv-pill{
+  scroll-snap-align:start;flex-shrink:0;
+  padding:8px 16px;border-radius:20px;
+  border:1px solid rgba(148,163,184,.15);
+  background:rgba(15,23,42,.6);
+  color:#94a3b8;font-size:12px;font-weight:600;
+  cursor:pointer;white-space:nowrap;
+  transition:all .2s;
+  display:flex;align-items:center;gap:6px;
+  position:relative;
+}
+.srv-pill:hover{background:rgba(59,130,246,.1);border-color:rgba(96,165,250,.3)}
+.srv-pill.active{
+  background:linear-gradient(135deg,rgba(59,130,246,.9),rgba(99,102,241,.9));
+  color:#fff;border-color:rgba(99,102,241,.5);
+  box-shadow:0 4px 20px rgba(59,130,246,.35);
+}
+.srv-pill.failed{
+  opacity:.45;cursor:not-allowed;
+  text-decoration:line-through;
+}
+.srv-pill .pill-dot{
+  width:6px;height:6px;border-radius:50%;
+  background:rgba(255,255,255,.3);flex-shrink:0;
+}
+.srv-pill.active .pill-dot{background:rgba(255,255,255,.9)}
+.srv-pill.failed .pill-dot{background:#ef4444}
+.srv-group{
+  font-size:9px;font-weight:500;
+  background:rgba(0,0,0,.25);
+  padding:1px 5px;border-radius:4px;
+  color:rgba(255,255,255,.5);margin-left:2px;
+}
 
-        /* Retry button */
-        #retry-btn {
-            margin-top: .75rem;
-            padding: .5rem 1.4rem;
-            border-radius: 9999px;
-            background: #3b82f6;
-            color: #fff;
-            font-size: .85rem;
-            font-weight: 600;
-            border: none;
-            cursor: pointer;
-        }
-    </style>
+/* ── Manual URL input panel ───────────────────────────────────── */
+#custom-panel{
+  margin:0 12px 10px;
+  border:1px solid rgba(255,255,255,.07);
+  border-radius:18px;overflow:hidden;
+}
+#custom-toggle{
+  width:100%;padding:12px 16px;
+  background:rgba(255,255,255,.03);
+  display:flex;align-items:center;justify-content:space-between;
+  cursor:pointer;border:none;color:#64748b;
+  font-size:12px;font-weight:600;
+}
+#custom-toggle svg{transition:transform .25s}
+#custom-toggle.open svg{transform:rotate(180deg)}
+#custom-body{
+  display:none;padding:12px 14px;
+  background:rgba(0,0,0,.2);
+  border-top:1px solid rgba(255,255,255,.05);
+}
+#custom-body.open{display:block}
+#custom-url{
+  width:100%;background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:10px;color:#e2e8f0;
+  font-size:12px;padding:10px 12px;
+  outline:none;
+}
+#custom-url:focus{border-color:rgba(96,165,250,.5)}
+#custom-url::placeholder{color:#475569}
+#custom-play{
+  margin-top:8px;width:100%;
+  padding:10px;border-radius:10px;
+  background:linear-gradient(135deg,#3b82f6,#6366f1);
+  color:#fff;font-size:12px;font-weight:700;
+  border:none;cursor:pointer;
+}
+
+/* ── Bottom navigation ───────────────────────────────────────── */
+#bottom-nav{
+  position:fixed;bottom:0;left:50%;transform:translateX(-50%);
+  width:100%;max-width:480px;
+  background:rgba(10,14,26,.95);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border-top:1px solid rgba(255,255,255,.06);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  z-index:100;
+}
+.nav-inner{display:flex;justify-content:space-around;align-items:center;padding:4px 0}
+.nav-btn{
+  flex:1;display:flex;flex-direction:column;align-items:center;
+  gap:2px;padding:8px 4px;border:none;background:none;
+  color:#475569;cursor:pointer;transition:color .2s;
+  font-size:10px;font-weight:600;letter-spacing:.02em;
+}
+.nav-btn.active{color:#3b82f6}
+.nav-btn svg{width:20px;height:20px}
+.nav-btn .nav-icon-wrap{
+  padding:5px;border-radius:10px;
+  transition:background .2s;
+}
+.nav-btn.active .nav-icon-wrap{background:rgba(59,130,246,.15)}
+
+/* ── Tab panels ───────────────────────────────────────────────── */
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+
+/* Favorites + Profile placeholder */
+.empty-state{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:48px 24px;gap:12px;text-align:center;
+}
+.empty-state svg{opacity:.25}
+.empty-state h3{font-size:15px;font-weight:700;color:#475569}
+.empty-state p{font-size:12px;color:#334155;max-width:200px}
+
+/* ── Scroll-fade background art ──────────────────────────────── */
+#bg-art{
+  position:fixed;inset:0;z-index:-1;
+  background-image:url('wc2026.jpg');
+  background-size:cover;background-position:center;
+  filter:blur(28px) brightness(.3);
+  transform:scale(1.08);
+  max-width:480px;left:50%;transform:translateX(-50%) scale(1.08);
+}
+
+/* ── Announcement bar ────────────────────────────────────────── */
+#warn-bar{
+  margin:0 12px 10px;padding:10px 14px;
+  border-radius:12px;
+  background:rgba(251,191,36,.08);
+  border:1px solid rgba(251,191,36,.2);
+  font-size:11px;color:#fbbf24;
+  display:none;
+  align-items:flex-start;gap:8px;
+}
+#warn-bar.visible{display:flex}
+#warn-bar svg{flex-shrink:0;margin-top:1px}
+
+/* ── Source badge on video ───────────────────────────────────── */
+#src-badge{
+  position:absolute;top:10px;left:10px;z-index:6;
+  background:rgba(0,0,0,.6);backdrop-filter:blur(6px);
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:8px;padding:3px 8px;
+  font-size:9px;font-weight:700;color:#94a3b8;letter-spacing:.06em;
+  text-transform:uppercase;
+  display:none;
+}
+#src-badge.visible{display:block}
+</style>
 </head>
-<body class="bg-black text-slate-100 h-[100dvh] overflow-hidden font-sans antialiased flex justify-center">
+<body>
+<div id="bg-art"></div>
 
-    <!-- Background art -->
-    <div class="fixed inset-0 -z-10 pointer-events-none">
-        <div class="absolute inset-0 bg-cover bg-center"
-             style="background-image:url('wc2026.jpg');filter:blur(20px);transform:scale(1.05)"></div>
-        <div class="absolute inset-0 bg-black/55"></div>
+<div id="app">
+  <!-- ── Header ─────────────────────────────────────────────────── -->
+  <div id="hdr">
+    <img id="hdr-logo" src="t&amp;c.png" alt="Tech &amp; Click TV">
+    <div id="live-badge">
+      <div class="live-dot"></div>
+      <span>Live</span>
+    </div>
+  </div>
+
+  <!-- ── Scrollable body ────────────────────────────────────────── -->
+  <div id="main">
+
+    <!-- Tab: Home -->
+    <div id="tab-home" class="tab-panel active">
+
+      <!-- Match info card -->
+      <div id="match-card" class="hidden">
+        <div id="match-icon">⚽</div>
+        <div id="match-info">
+          <div id="match-title">FIFA World Cup 2026</div>
+          <div id="match-sub">Live • Sports</div>
+          <div id="match-time" id="match-time"></div>
+        </div>
+      </div>
+
+      <!-- Warning bar (shown when fallback is active) -->
+      <div id="warn-bar">
+        <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
+        </svg>
+        <span id="warn-text"></span>
+      </div>
+
+      <!-- Video card -->
+      <div id="video-card">
+        <div id="video-wrap">
+          <video id="player" controls playsinline autoplay muted></video>
+          <div id="src-badge"></div>
+
+          <!-- Spinner -->
+          <div id="spin-overlay" class="overlay">
+            <div class="spin-ring"></div>
+            <div id="spin-label">Connecting to stream…</div>
+            <div id="spin-source"></div>
+          </div>
+
+          <!-- Error -->
+          <div id="err-overlay" class="overlay">
+            <div id="err-icon">📡</div>
+            <div id="err-msg">Stream unavailable</div>
+            <div id="err-sub">Try a different server or check back later</div>
+            <div id="auto-switch"></div>
+            <div class="err-actions">
+              <button class="btn btn-primary" onclick="TCTV.retry()">↺ Retry</button>
+              <button class="btn btn-ghost" onclick="TCTV.nextServer()">Next Server →</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Server selector -->
+      <div id="server-area">
+        <div id="server-label">Select Server</div>
+        <div id="server-scroll"></div>
+      </div>
+
+      <!-- Manual URL input -->
+      <div id="custom-panel">
+        <button id="custom-toggle" onclick="TCTV.toggleCustom(this)">
+          <span>⚡ Play Custom Stream URL</span>
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
+          </svg>
+        </button>
+        <div id="custom-body">
+          <input id="custom-url" type="url" placeholder="https://example.com/stream.m3u8 or paste any stream URL">
+          <button id="custom-play" onclick="TCTV.playCustomUrl()">▶ Play Stream</button>
+        </div>
+      </div>
+
+    </div><!-- /tab-home -->
+
+    <!-- Tab: Favorites -->
+    <div id="tab-fav" class="tab-panel">
+      <div class="empty-state">
+        <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/>
+        </svg>
+        <h3>No Favorites Yet</h3>
+        <p>Tap the ♥ on any stream to save it here</p>
+      </div>
     </div>
 
-    <!-- App shell -->
-    <div class="w-full max-w-md md:max-w-none bg-slate-900/80 h-[100dvh] flex flex-col relative z-10
-                shadow-[0_0_40px_rgba(0,0,0,.5)] overflow-hidden sm:border-x sm:border-slate-800
-                backdrop-blur-xl" style="overscroll-behavior-y:none">
-
-        <!-- Header -->
-        <header class="sticky top-0 z-50 bg-slate-900/80 backdrop-blur border-b border-white/5 px-6 py-4 flex items-center justify-center">
-            <div class="px-8 py-2 rounded-full"
-                 style="background:radial-gradient(circle,rgba(165,243,252,.15) 0%,rgba(15,23,42,0) 70%)">
-                <img src="t&amp;c.png" alt="Tech &amp; Click TV" class="h-10 w-auto object-contain drop-shadow-md">
-            </div>
-        </header>
-
-        <!-- Main content -->
-        <main class="flex-1 overflow-y-auto p-4 pb-28" style="-webkit-overflow-scrolling:touch">
-            <section class="rounded-[28px] border border-slate-800 bg-slate-950/95 shadow-[0_24px_64px_rgba(0,0,0,.45)] overflow-hidden">
-
-                <!-- ═══════════════════════════════════════════
-                     VIDEO PLAYER  (no iframe, no third-party DOM)
-                     ═══════════════════════════════════════ -->
-                <div id="video-wrap" class="aspect-video bg-black rounded-t-[28px] overflow-hidden">
-                    <video id="live-video" controls playsinline autoplay></video>
-
-                    <!-- Loading spinner -->
-                    <div id="spinner">
-                        <div class="spin-ring"></div>
-                        <span class="text-slate-400 text-sm font-medium">Loading stream…</span>
-                    </div>
-
-                    <!-- Error state -->
-                    <div id="error-box">
-                        <svg class="w-10 h-10 text-red-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                  d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-                        </svg>
-                        <p id="error-msg" class="text-red-400 text-sm font-medium">Stream unavailable.</p>
-                        <p class="text-slate-500 text-xs mt-1">Try a different server below.</p>
-                        <button id="retry-btn" onclick="loadServer(currentServerIndex)">Retry</button>
-                    </div>
-                </div>
-
-                <!-- Server switcher pills -->
-                <div class="pt-4 pb-4 px-4">
-                    <div class="overflow-x-auto">
-                        <div id="server-list" class="flex gap-3 px-1 py-1"></div>
-                    </div>
-                </div>
-
-            </section>
-        </main>
-
-        <!-- Bottom nav -->
-        <nav id="bottom-nav" class="border-t border-white/5">
-            <div class="flex justify-around items-center px-2 py-2">
-                <button class="flex flex-col items-center p-2 text-indigo-400">
-                    <div class="p-1.5 rounded-xl bg-indigo-500/20 mb-1">
-                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/>
-                        </svg>
-                    </div>
-                    <span class="text-[10px] font-semibold tracking-wide">Home</span>
-                </button>
-                <button class="flex flex-col items-center p-2 text-slate-500">
-                    <div class="p-1.5 rounded-xl mb-1">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                  d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
-                        </svg>
-                    </div>
-                    <span class="text-[10px] font-medium tracking-wide">Favorites</span>
-                </button>
-                <button class="flex flex-col items-center p-2 text-slate-500">
-                    <div class="p-1.5 rounded-xl mb-1">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                        </svg>
-                    </div>
-                    <span class="text-[10px] font-medium tracking-wide">Profile</span>
-                </button>
-            </div>
-        </nav>
+    <!-- Tab: Profile -->
+    <div id="tab-profile" class="tab-panel">
+      <div class="empty-state">
+        <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/>
+        </svg>
+        <h3>Tech &amp; Click TV</h3>
+        <p>Version 2.0 · Free Live Sports Streaming</p>
+      </div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════════════
-         PLAYER LOGIC
-         ═══════════════════════════════════════════════════════ -->
-    <script>
-    (function () {
-        'use strict';
+  </div><!-- /main -->
 
-        // ── DOM refs ────────────────────────────────────────────────────
-        const video      = document.getElementById('live-video');
-        const spinner    = document.getElementById('spinner');
-        const errorBox   = document.getElementById('error-box');
-        const errorMsg   = document.getElementById('error-msg');
-        const serverList = document.getElementById('server-list');
+  <!-- ── Bottom Nav ──────────────────────────────────────────────── -->
+  <nav id="bottom-nav">
+    <div class="nav-inner">
 
-        // ── State ────────────────────────────────────────────────────────
-        let hlsInstance        = null;
-        let servers            = [];   // filled by stream.php
-        window.currentServerIndex = 0;
+      <button class="nav-btn active" id="nav-home" onclick="TCTV.switchTab('home',this)">
+        <div class="nav-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M11.47 3.84a.75.75 0 011.06 0l8.69 8.69a.75.75 0 101.06-1.06l-8.689-8.69a2.25 2.25 0 00-3.182 0l-8.69 8.69a.75.75 0 001.061 1.06l8.69-8.69z"/>
+            <path d="M12 5.432l8.159 8.159c.03.03.06.058.091.086v6.198c0 1.035-.84 1.875-1.875 1.875H15a.75.75 0 01-.75-.75v-4.5a.75.75 0 00-.75-.75h-3a.75.75 0 00-.75.75V21a.75.75 0 01-.75.75H5.625a1.875 1.875 0 01-1.875-1.875v-6.198a2.29 2.29 0 00.091-.086L12 5.43z"/>
+          </svg>
+        </div>
+        Home
+      </button>
 
-        // ── Custom channels injected from PHP (DB) ────────────────────
-        const customChannels = <?php echo json_encode(
-            array_map(function($ch) {
-                return [
-                    'name'      => $ch['display_name'] ?: 'Channel',
-                    'raw_url'   => $ch['target_url'],
-                    'proxy_url' => 'proxy.php?url=' . rawurlencode($ch['target_url']) . '&raw=true',
-                ];
-            }, $customChannels)
-        , JSON_UNESCAPED_SLASHES); ?>;
+      <button class="nav-btn" id="nav-fav" onclick="TCTV.switchTab('fav',this)">
+        <div class="nav-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/>
+          </svg>
+        </div>
+        Favorites
+      </button>
 
-        // ── UI helpers ───────────────────────────────────────────────────
-        function showSpinner()  { spinner.classList.remove('hidden'); errorBox.classList.remove('visible'); }
-        function hideSpinner()  { spinner.classList.add('hidden'); }
-        function showError(msg) { hideSpinner(); errorMsg.textContent = msg || 'Stream unavailable.'; errorBox.classList.add('visible'); }
-        function hideError()    { errorBox.classList.remove('visible'); }
+      <button class="nav-btn" id="nav-profile" onclick="TCTV.switchTab('profile',this)">
+        <div class="nav-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/>
+          </svg>
+        </div>
+        Profile
+      </button>
 
-        function markActive(idx) {
-            document.querySelectorAll('#server-list .server-pill').forEach((el, i) => {
-                el.classList.toggle('active', i === idx);
-            });
-        }
+    </div>
+  </nav>
+</div><!-- /app -->
 
-        // ── Destroy any existing HLS instance ───────────────────────────
-        function destroyHls() {
-            if (hlsInstance) {
-                hlsInstance.destroy();
-                hlsInstance = null;
-            }
-        }
+<script>
+(function(){
+'use strict';
 
-        // ── Load a stream by its index in the servers array ─────────────
-        window.loadServer = function loadServer(idx) {
-            if (!servers[idx]) return;
-            window.currentServerIndex = idx;
-            markActive(idx);
-            hideError();
-            showSpinner();
+// ══════════════════════════════════════════════════════════════════════════════
+//  TCTV — Tech & Click TV Player Core
+// ══════════════════════════════════════════════════════════════════════════════
 
-            const proxyUrl = servers[idx].proxy_url;
-            destroyHls();
+const $ = id => document.getElementById(id);
 
-            if (Hls.isSupported()) {
-                hlsInstance = new Hls({
-                    enableWorker:             true,
-                    lowLatencyMode:           true,
-                    maxMaxBufferLength:       60,
-                    fragLoadingMaxRetry:      6,
-                    manifestLoadingMaxRetry:  6,
-                    levelLoadingMaxRetry:     6,
-                    fragLoadingRetryDelay:    1000,
-                    manifestLoadingRetryDelay: 1000,
-                });
+const TCTV = window.TCTV = {
+  // ── State ───────────────────────────────────────────────────────────────────
+  hls: null,
+  servers: [],
+  currentIdx: 0,
+  failedServers: new Set(),
+  autoSwitchTimer: null,
+  autoSwitchCountdown: null,
+  customChannelsFromPHP: <?= $customChannelsJson ?>,
 
-                hlsInstance.loadSource(proxyUrl);
-                hlsInstance.attachMedia(video);
+  // ── DOM refs ────────────────────────────────────────────────────────────────
+  player: $('player'),
+  spinOverlay: $('spin-overlay'),
+  spinLabel: $('spin-label'),
+  spinSource: $('spin-source'),
+  errOverlay: $('err-overlay'),
+  errMsg: $('err-msg'),
+  errSub: $('err-sub'),
+  autoSwitch: $('auto-switch'),
+  serverScroll: $('server-scroll'),
+  srcBadge: $('src-badge'),
+  warnBar: $('warn-bar'),
+  warnText: $('warn-text'),
+  matchCard: $('match-card'),
+  matchTitle: $('match-title'),
+  matchSub: $('match-sub'),
+  matchTime: $('match-time'),
+  customToggle: $('custom-toggle'),
+  customBody: $('custom-body'),
+  customUrl: $('custom-url'),
 
-                hlsInstance.on(Hls.Events.MANIFEST_PARSED, function () {
-                    hideSpinner();
-                    video.play().catch(() => {/* autoplay policy — user will tap play */});
-                });
+  // ── UI helpers ──────────────────────────────────────────────────────────────
+  showSpinner(label='Loading stream…',src=''){
+    this.spinOverlay.classList.remove('gone');
+    this.errOverlay.classList.remove('visible');
+    this.spinLabel.textContent=label;
+    this.spinSource.textContent=src;
+  },
+  hideSpinner(){this.spinOverlay.classList.add('gone')},
+  showError(msg,sub='',autoNext=false){
+    this.hideSpinner();
+    this.errMsg.textContent=msg;
+    this.errSub.textContent=sub;
+    this.errOverlay.classList.add('visible');
+    if(autoNext) this.scheduleAutoSwitch();
+  },
+  hideError(){this.errOverlay.classList.remove('visible');this.cancelAutoSwitch()},
+  setBadge(text){this.srcBadge.textContent=text;this.srcBadge.classList.add('visible')},
+  hideBadge(){this.srcBadge.classList.remove('visible')},
+  setWarning(text){this.warnText.textContent=text;this.warnBar.classList.add('visible')},
+  hideWarning(){this.warnBar.classList.remove('visible')},
 
-                hlsInstance.on(Hls.Events.ERROR, function (event, data) {
-                    if (!data.fatal) return;
-                    console.error('[HLS fatal]', data.type, data.details);
-                    switch (data.type) {
-                        case Hls.ErrorTypes.NETWORK_ERROR:
-                            hlsInstance.startLoad();          // retry once
-                            break;
-                        case Hls.ErrorTypes.MEDIA_ERROR:
-                            hlsInstance.recoverMediaError();
-                            break;
-                        default:
-                            destroyHls();
-                            showError('Server ' + (idx + 1) + ' failed. Try another server.');
-                    }
-                });
+  // ── Auto-switch countdown ───────────────────────────────────────────────────
+  scheduleAutoSwitch(){
+    this.cancelAutoSwitch();
+    let sec=5;
+    this.autoSwitch.textContent=`Switching to next server in ${sec}s...`;
+    this.autoSwitchCountdown=setInterval(()=>{
+      sec--;
+      if(sec<=0){this.cancelAutoSwitch();this.nextServer();return}
+      this.autoSwitch.textContent=`Switching to next server in ${sec}s...`;
+    },1000);
+    this.autoSwitchTimer=setTimeout(()=>this.nextServer(),5000);
+  },
+  cancelAutoSwitch(){
+    if(this.autoSwitchTimer){clearTimeout(this.autoSwitchTimer);this.autoSwitchTimer=null}
+    if(this.autoSwitchCountdown){clearInterval(this.autoSwitchCountdown);this.autoSwitchCountdown=null}
+    this.autoSwitch.textContent='';
+  },
 
-            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                // Native HLS (iOS Safari)
-                video.src = proxyUrl;
-                video.addEventListener('loadedmetadata', function onMeta() {
-                    video.removeEventListener('loadedmetadata', onMeta);
-                    hideSpinner();
-                    video.play().catch(() => {});
-                }, { once: true });
-                video.addEventListener('error', function onErr() {
-                    video.removeEventListener('error', onErr);
-                    showError('Server ' + (idx + 1) + ' failed. Try another server.');
-                }, { once: true });
-            } else {
-                showError('Your browser does not support HLS playback.');
-            }
-        };
+  // ── Server cycling ──────────────────────────────────────────────────────────
+  nextServer(){
+    let tried=0;
+    while(tried<this.servers.length){
+      this.currentIdx=(this.currentIdx+1)%this.servers.length;
+      if(!this.failedServers.has(this.currentIdx)){
+        this.loadServer(this.currentIdx);
+        return;
+      }
+      tried++;
+    }
+    this.showError('All servers exhausted','Please retry or use a different source');
+  },
 
-        // ── Build the server pill buttons ────────────────────────────────
-        function buildPills() {
-            serverList.innerHTML = '';
-            servers.forEach(function (srv, idx) {
-                const btn = document.createElement('button');
-                btn.type      = 'button';
-                btn.className = 'server-pill' + (idx === 0 ? ' active' : '');
-                btn.textContent = srv.name;
-                btn.onclick   = () => loadServer(idx);
-                serverList.appendChild(btn);
-            });
-        }
+  // ── HLS lifecycle ───────────────────────────────────────────────────────────
+  destroyHls(){if(this.hls){this.hls.destroy();this.hls=null}},
 
-        // ── Fetch stream list from stream.php then kick off playback ─────
-        function init() {
-            showSpinner();
-            fetch('stream.php')
-                .then(function (res) {
-                    if (!res.ok) throw new Error('HTTP ' + res.status);
-                    return res.json();
-                })
-                .then(function (data) {
-                    if (!data.ok || !data.servers || data.servers.length === 0) {
-                        throw new Error(data.error || 'No streams returned.');
-                    }
+  loadServer(idx){
+    if(!this.servers[idx])return;
+    this.currentIdx=idx;
+    this.markActive(idx);
+    this.hideError();
+    this.cancelAutoSwitch();
 
-                    // Merge: live streams first, then any admin-added custom channels
-                    servers = data.servers.concat(customChannels);
-                    buildPills();
-                    loadServer(0);   // autoplay the first server
-                })
-                .catch(function (err) {
-                    console.error('[stream.php]', err);
+    const srv=this.servers[idx];
+    this.showSpinner('Connecting to '+srv.name,srv.group||'');
+    this.destroyHls();
 
-                    // Fallback: if DB has custom channels, use those directly
-                    if (customChannels.length > 0) {
-                        servers = customChannels;
-                        buildPills();
-                        loadServer(0);
-                    } else {
-                        showError('Could not load stream list. ' + err.message);
-                    }
-                });
-        }
+    if(srv.is_fallback)this.setWarning('⚠ All live sources failed. Showing test stream.');
+    else this.hideWarning();
 
-        // ── Clean up on page hide (mobile background tab) ────────────────
-        document.addEventListener('visibilitychange', function () {
-            if (document.hidden) {
-                destroyHls();
-            } else if (servers.length > 0) {
-                loadServer(window.currentServerIndex);
-            }
+    if(Hls.isSupported()){
+      this.hls=new Hls({
+        enableWorker:true,lowLatencyMode:true,maxMaxBufferLength:60,
+        fragLoadingMaxRetry:6,manifestLoadingMaxRetry:6,levelLoadingMaxRetry:6,
+        fragLoadingRetryDelay:1000,manifestLoadingRetryDelay:1000,
+      });
+      this.hls.loadSource(srv.proxy_url);
+      this.hls.attachMedia(this.player);
+
+      this.hls.on(Hls.Events.MANIFEST_PARSED,()=>{
+        this.hideSpinner();
+        this.player.play().catch(e=>{
+          if(e.name==='NotAllowedError')this.player.muted=false;
         });
+        this.setBadge(srv.name);
+      });
 
-        // ── Go ───────────────────────────────────────────────────────────
-        init();
-    })();
-    </script>
+      this.hls.on(Hls.Events.ERROR,(ev,data)=>{
+        if(!data.fatal)return;
+        console.error('[HLS fatal]',data.type,data.details);
+        switch(data.type){
+          case Hls.ErrorTypes.NETWORK_ERROR:
+            this.hls.startLoad();
+            break;
+          case Hls.ErrorTypes.MEDIA_ERROR:
+            this.hls.recoverMediaError();
+            break;
+          default:
+            this.destroyHls();
+            this.failedServers.add(idx);
+            this.markFailed(idx);
+            this.showError(srv.name+' failed','Auto-switching to next server...',true);
+        }
+      });
+    }else if(this.player.canPlayType('application/vnd.apple.mpegurl')){
+      // Native HLS (iOS Safari)
+      this.player.src=srv.proxy_url;
+      this.player.addEventListener('loadedmetadata',()=>{
+        this.hideSpinner();
+        this.player.play().catch(e=>{});
+        this.setBadge(srv.name);
+      },{once:true});
+      this.player.addEventListener('error',()=>{
+        this.failedServers.add(idx);
+        this.markFailed(idx);
+        this.showError(srv.name+' failed','Auto-switching to next server...',true);
+      },{once:true});
+    }else{
+      this.showError('Your browser does not support HLS','Try using Chrome, Safari, or Edge');
+    }
+  },
+
+  // ── Server pill UI ──────────────────────────────────────────────────────────
+  buildPills(){
+    this.serverScroll.innerHTML='';
+    this.servers.forEach((srv,i)=>{
+      const pill=document.createElement('button');
+      pill.className='srv-pill'+(i===0?' active':'');
+      pill.innerHTML=`<div class="pill-dot"></div>${srv.name}`;
+      if(srv.group && srv.group!=='Live'){
+        const badge=document.createElement('span');
+        badge.className='srv-group';
+        badge.textContent=srv.group;
+        pill.appendChild(badge);
+      }
+      pill.onclick=()=>this.loadServer(i);
+      this.serverScroll.appendChild(pill);
+    });
+  },
+  markActive(idx){
+    document.querySelectorAll('.srv-pill').forEach((el,i)=>{
+      el.classList.toggle('active',i===idx);
+    });
+  },
+  markFailed(idx){
+    const pills=document.querySelectorAll('.srv-pill');
+    if(pills[idx])pills[idx].classList.add('failed');
+  },
+
+  // ── Match info card ─────────────────────────────────────────────────────────
+  showMatchCard(title,sub,time){
+    this.matchCard.classList.remove('hidden');
+    this.matchTitle.textContent=title;
+    this.matchSub.textContent=sub;
+    this.matchTime.textContent=time;
+  },
+  hideMatchCard(){this.matchCard.classList.add('hidden')},
+
+  // ── Manual URL input ────────────────────────────────────────────────────────
+  toggleCustom(btn){
+    const open=this.customBody.classList.toggle('open');
+    btn.classList.toggle('open',open);
+  },
+  playCustomUrl(){
+    const url=this.customUrl.value.trim();
+    if(!url){alert('Please enter a stream URL');return}
+    if(!/^https?:\/\//i.test(url)){alert('URL must start with http:// or https://');return}
+    this.servers=[{
+      name:'Custom Stream',
+      group:'Manual',
+      logo:'',
+      raw_url:url,
+      proxy_url:'proxy.php?url='+encodeURIComponent(url)+'&raw=true',
+    }];
+    this.currentIdx=0;
+    this.failedServers.clear();
+    this.buildPills();
+    this.loadServer(0);
+  },
+
+  // ── Tab switching ───────────────────────────────────────────────────────────
+  switchTab(name,btn){
+    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+    document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+    $('tab-'+name).classList.add('active');
+    btn.classList.add('active');
+  },
+
+  // ── Retry ───────────────────────────────────────────────────────────────────
+  retry(){
+    this.failedServers.delete(this.currentIdx);
+    this.loadServer(this.currentIdx);
+  },
+
+  // ── Init ────────────────────────────────────────────────────────────────────
+  async init(){
+    this.showSpinner('Fetching stream list…','');
+
+    try{
+      const res=await fetch('stream.php');
+      if(!res.ok)throw new Error('HTTP '+res.status);
+      const data=await res.json();
+
+      if(!data.ok && !data.servers){
+        throw new Error(data.error||'No streams available');
+      }
+
+      // Merge: live servers + custom channels from DB
+      this.servers=(data.servers||[]).concat(this.customChannelsFromPHP);
+
+      if(this.servers.length===0){
+        throw new Error('No streams available. Check back later.');
+      }
+
+      // Show match card if we have live FIFA World Cup streams
+      const hasFifa=this.servers.some(s=>(s.name||'').toLowerCase().includes('fifa'));
+      if(hasFifa){
+        this.showMatchCard('FIFA World Cup 2026','Group Stage • Live','Jun 11 – Jul 19');
+      }
+
+      this.buildPills();
+      this.loadServer(0);
+
+      // If warning present, display it
+      if(data.warning)this.setWarning(data.warning);
+
+    }catch(err){
+      console.error('[stream.php]',err);
+
+      // Fallback to DB channels if stream.php failed
+      if(this.customChannelsFromPHP.length>0){
+        this.servers=this.customChannelsFromPHP;
+        this.buildPills();
+        this.loadServer(0);
+        this.setWarning('⚠ Live sources unavailable. Showing saved channels.');
+      }else{
+        this.showError('Could not load stream list',err.message);
+      }
+    }
+  }
+};
+
+// ── Page cleanup on hide (mobile background tab) ──────────────────────────────
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){
+    TCTV.destroyHls();
+    TCTV.cancelAutoSwitch();
+  }else if(TCTV.servers.length>0){
+    TCTV.loadServer(TCTV.currentIdx);
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  GO
+// ══════════════════════════════════════════════════════════════════════════════
+TCTV.init();
+
+})();
+</script>
 </body>
 </html>
