@@ -196,16 +196,18 @@ $ch = curl_init($targetUrl);
 curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_FOLLOWLOCATION => true,          // follow 301/302 redirects
-    CURLOPT_MAXREDIRS      => 8,
-    // Mobile Safari UA — some CDNs (ToffeeLive, Workers) serve different
-    // responses or skip bot-detection for mobile browser user agents
+    CURLOPT_MAXREDIRS      => 5,
+    // Mobile Safari UA — CDNs and Workers skip bot-detection for known mobile UAs
     CURLOPT_USERAGENT      => 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+    // CURLOPT_REFERER sets the Referer header at the cURL layer — it persists
+    // correctly through redirects, unlike a header set only in CURLOPT_HTTPHEADER
+    CURLOPT_REFERER        => $referer,
     CURLOPT_SSL_VERIFYPEER => false,
     CURLOPT_SSL_VERIFYHOST => 0,
-    CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4,  // force IPv4 — broken IPv6 on some cPanel hosts causes timeouts
-    CURLOPT_CONNECTTIMEOUT => 15,            // raised from 10s — gives slow CDNs time to respond
+    CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4,  // force IPv4 — broken IPv6 on some cPanel hosts
+    CURLOPT_CONNECTTIMEOUT => 15,
     CURLOPT_TIMEOUT        => 45,
-    CURLOPT_ENCODING       => '',
+    CURLOPT_ENCODING       => '',            // handles gzip/br/deflate compressed responses
     CURLOPT_HTTPHEADER     => $headers,
 ]);
 
