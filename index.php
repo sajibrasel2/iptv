@@ -198,6 +198,39 @@ body{
   color:rgba(255,255,255,.5);margin-left:2px;
 }
 
+/* ── Desktop server pills — compact, wrap, no scroll ─────────── */
+@media (min-width:768px){
+  /* Widen the app shell so all pills fit comfortably */
+  #app{max-width:860px}
+
+  #server-scroll{
+    flex-wrap:wrap;          /* pills wrap instead of scrolling   */
+    overflow-x:visible;      /* no horizontal scrollbar on desktop */
+    scroll-snap-type:none;
+    padding:2px 0 4px;
+    gap:6px;
+  }
+
+  /* Smaller, tighter pills on desktop */
+  .srv-pill{
+    scroll-snap-align:none;
+    flex-shrink:1;           /* allow shrink so they share the row  */
+    padding:5px 12px;
+    border-radius:14px;
+    font-size:11px;
+    gap:5px;
+  }
+
+  .srv-pill .pill-dot{
+    width:5px;height:5px;
+  }
+
+  .srv-group{
+    font-size:8px;
+    padding:1px 4px;
+  }
+}
+
 /* ── Manual URL input panel ───────────────────────────────────── */
 #custom-panel{
   margin:0 12px 10px;
