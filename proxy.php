@@ -162,30 +162,42 @@ function buildCurl(string $url, string $sourceHint = 'https://fifalive.click/'):
 
 /**
  * Pick the correct Referer/Origin for each upstream CDN/worker.
+ *
+ * Worker segments are served through CF Workers which act as the player,
+ * so the segment CDN sees the worker URL as Referer — NOT fifalive.click.
  * Getting this wrong causes 403s on signed CDN URLs.
  */
 function inferReferer(string $url): string {
     $host = strtolower(parse_url($url, PHP_URL_HOST) ?? '');
 
+    // Ordered most-specific first
     $map = [
-        'toffeelive.com'        => 'https://toffeelive.com/',
-        'prod-cdn01-live'       => 'https://toffeelive.com/',
-        'nextgoal.workers.dev'  => 'https://fifalive.click/',
-        'cinecdn.workers.dev'   => 'https://fifalive.click/',
-        'smtahmidx.workers.dev' => 'https://fifalive.click/',
-        'rockstreamer.com'      => 'https://fifalive.click/',
-        'tiktokcdn.com'         => 'https://fifalive.click/',
-        'livecdn.'              => 'https://fifalive.click/',
-        'ilovetoplay.xyz'       => 'https://ilovetoplay.xyz/',
-        'eplayer.to'            => 'https://ilovetoplay.xyz/',
-        'dlhd'                  => 'https://ilovetoplay.xyz/',
+        // toffeelive CDN — Server 1 segments come from here
+        'prod-cdn01-live.toffeelive' => 'https://toffeelive.com/',
+        'toffeelive.com'             => 'https://toffeelive.com/',
+
+        // Cloudflare Workers (master playlists AND their own segment proxies)
+        'nextgoal.workers.dev'       => 'https://fifalive.click/',
+        'cinecdn.workers.dev'        => 'https://fifalive.click/',
+        'smtahmidx.workers.dev'      => 'https://fifalive.click/',
+
+        // Rockstreamer CDN — underlying source for Worker 2 & 3 segments
+        // Segments are fetched by the Worker, so Referer must be the worker host
+        'rockstreamer.com'           => 'https://live3.nextgoal.workers.dev/',
+        'livecdn.rockstreamer'       => 'https://live3.nextgoal.workers.dev/',
+
+        // TikTok CDN — underlying source for Worker 4 (fx.cinecdn.workers.dev)
+        'tiktokcdn.com'              => 'https://fx.cinecdn.workers.dev/',
+        'tiktok.com'                 => 'https://fx.cinecdn.workers.dev/',
+
+        // tc-sg rockstreamer (Worker 3 segments)
+        'tc-sg.rockstreamer'         => 'https://live.smtahmidx.workers.dev/',
     ];
 
     foreach ($map as $needle => $referer) {
         if (str_contains($host, $needle)) return $referer;
     }
 
-    // Default: use fifalive as the referring page
     return 'https://fifalive.click/';
 }
 
@@ -232,22 +244,34 @@ if ($looksLikeM3u8) {
 }
 
 // ── Binary media pass-through ────────────────────────────────────────────────
-// Some CDNs return TS/AAC/MP4 with wrong or missing Content-Type.
-// Detect by URL extension.
-if ($ctype === '' || stripos($ctype, 'text/html') !== false || stripos($ctype, 'octet-stream') !== false) {
-    $ext = strtolower(pathinfo(parse_url($finalUrl, PHP_URL_PATH) ?? '', PATHINFO_EXTENSION));
-    $extMap = [
-        'ts'   => 'video/MP2T',
-        'aac'  => 'audio/aac',
-        'mp4'  => 'video/mp4',
-        'm4s'  => 'video/iso.segment',
-        'fmp4' => 'video/mp4',
-        'm4v'  => 'video/mp4',
-        'key'  => 'application/octet-stream',
-        'bin'  => 'application/octet-stream',
-        'mp3'  => 'audio/mpeg',
-    ];
-    $ctype = $extMap[$ext] ?? 'application/octet-stream';
+// Some CDNs (TikTok, rockstreamer) return TS bytes with wrong Content-Type
+// (e.g. image/jpeg, text/html, or application/octet-stream).
+// Detect media type by URL extension first, then fall back to ctype.
+$ext = strtolower(pathinfo(parse_url($finalUrl, PHP_URL_PATH) ?? '', PATHINFO_EXTENSION));
+$extMap = [
+    'ts'    => 'video/MP2T',
+    'aac'   => 'audio/aac',
+    'mp4'   => 'video/mp4',
+    'm4s'   => 'video/iso.segment',
+    'fmp4'  => 'video/mp4',
+    'm4v'   => 'video/mp4',
+    'key'   => 'application/octet-stream',
+    'bin'   => 'application/octet-stream',
+    'mp3'   => 'audio/mpeg',
+    // TikTok CDN serves TS segments with .image or no recognisable extension
+    'image' => 'video/MP2T',
+];
+
+if (isset($extMap[$ext])) {
+    $ctype = $extMap[$ext];
+} elseif ($ctype === '' || stripos($ctype, 'text/') !== false || stripos($ctype, 'image/') !== false || stripos($ctype, 'octet-stream') !== false) {
+    // Unknown extension and suspicious ctype — check if it looks like TS bytes
+    // TS packets start with sync byte 0x47
+    if (strlen($content) > 0 && ord($content[0]) === 0x47) {
+        $ctype = 'video/MP2T';
+    } else {
+        $ctype = $ctype ?: 'application/octet-stream';
+    }
 }
 
 header('Content-Type: ' . $ctype);

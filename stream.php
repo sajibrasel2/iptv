@@ -1,14 +1,14 @@
 <?php
 /**
- * stream.php — Multi-Source Stream Extraction API
+ * stream.php — Dynamic Stream Extraction API
  *
- * Tries each source in order, returns the first one that yields
- * valid M3U8 URLs. Falls back to a hardcoded test stream so the
- * player never shows a permanent blank screen.
+ * Fetches fifalive.click on every request (no caching).
+ * Parses all server entries, validates each one is reachable,
+ * then returns them all with proxy_url wrappers.
  *
- * Response:
- *  { "ok": true,  "source": "fifalive", "servers": [ {name, raw_url, proxy_url, group}, ... ] }
- *  { "ok": false, "error": "...", "servers": [ fallback entries ] }
+ * Response (always HTTP 200):
+ *   { "ok": true,  "source": "fifalive", "servers": [...], "errors": [...] }
+ *   { "ok": true,  "source": "fallback", "warning": "...", "servers": [...] }
  */
 
 header('Content-Type: application/json; charset=utf-8');
@@ -18,88 +18,95 @@ header('Expires: 0');
 header('Access-Control-Allow-Origin: *');
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Hardcoded fallback — always available, used when all live sources fail
-// Apple's public HLS test stream, genuinely free to use
+// Constants
 // ─────────────────────────────────────────────────────────────────────────────
-$FALLBACK_SERVERS = [
-    [
-        'name'      => 'Test Stream (HD)',
-        'group'     => 'Fallback',
-        'raw_url'   => 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
-        'proxy_url' => 'proxy.php?url=' . rawurlencode('https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8') . '&raw=true',
-        'is_fallback' => true,
-    ],
+const SOURCE_URL = 'https://fifalive.click/';
+const UA_BROWSER = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+
+// Fallback — always appended at end so the player is never completely empty
+$FALLBACK = [
+    'name'        => 'Test Stream',
+    'group'       => 'Fallback',
+    'logo'        => '',
+    'raw_url'     => 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+    'proxy_url'   => 'proxy.php?url=' . rawurlencode('https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8') . '&raw=true',
+    'is_fallback' => true,
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// cURL factory — realistic browser headers, configurable per-source
+// cURL helper — shared browser-like headers
 // ─────────────────────────────────────────────────────────────────────────────
-function makeCurlHandle(string $url, array $options = []) {
-    $referer    = $options['referer']  ?? 'https://fifalive.click/';
-    $origin     = $options['origin']   ?? 'https://fifalive.click';
-    $ua         = $options['ua']       ?? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
-    $timeout    = $options['timeout']  ?? 15;
-    $accept     = $options['accept']   ?? 'application/vnd.apple.mpegurl, application/x-mpegurl, */*';
-    $extra_hdrs = $options['headers']  ?? [];
-
-    $base_hdrs = [
-        'Accept: '          . $accept,
-        'Accept-Language: en-US,en;q=0.9',
-        'Referer: '         . $referer,
-        'Origin: '          . $origin,
-        'Connection: keep-alive',
-        'Cache-Control: no-cache',
-    ];
-
+function curlGet(string $url, array $extraHeaders = [], int $timeout = 15): array {
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_FOLLOWLOCATION => true,
         CURLOPT_MAXREDIRS      => 6,
-        CURLOPT_USERAGENT      => $ua,
+        CURLOPT_USERAGENT      => UA_BROWSER,
         CURLOPT_SSL_VERIFYPEER => false,
         CURLOPT_SSL_VERIFYHOST => 0,
         CURLOPT_CONNECTTIMEOUT => 8,
         CURLOPT_TIMEOUT        => $timeout,
-        CURLOPT_ENCODING       => '',
-        CURLOPT_HTTPHEADER     => array_merge($base_hdrs, $extra_hdrs),
+        CURLOPT_ENCODING       => '',           // Accept gzip/deflate
+        CURLOPT_HTTPHEADER     => array_merge([
+            'Accept: application/vnd.apple.mpegurl, application/x-mpegurl, */*',
+            'Accept-Language: en-US,en;q=0.9',
+            'Referer: ' . SOURCE_URL,
+            'Origin: https://fifalive.click',
+            'Cache-Control: no-cache',
+            'Pragma: no-cache',
+        ], $extraHeaders),
     ]);
-    return $ch;
+
+    $body  = curl_exec($ch);
+    $code  = (int)    curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $ctype = (string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+    $final = (string) curl_getinfo($ch, CURLINFO_EFFECTIVE_URL) ?: $url;
+    $err   = curl_error($ch);
+    curl_close($ch);
+
+    return [
+        'body'  => $body,
+        'code'  => $code,
+        'ctype' => $ctype,
+        'final' => $final,
+        'err'   => $err,
+        'ok'    => ($body !== false && $code >= 200 && $code < 300),
+    ];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sanitise a URL line from the source M3U8.
-//
-// The source site occasionally publishes malformed URLs, e.g.:
-//   https://live.smtahmidx.workers*dev/   (asterisk instead of dot)
-// filter_var(FILTER_VALIDATE_URL) rejects these silently, which drops the
-// server from the list entirely.  We fix common typos before validating.
+// URL sanitiser — fixes typos in the source M3U8
+// e.g.  workers*dev  →  workers.dev
 // ─────────────────────────────────────────────────────────────────────────────
-function sanitiseM3u8Url(string $raw): string {
+function sanitiseUrl(string $raw): string {
     $url = trim($raw);
-
-    // Replace * with . inside the hostname (e.g. workers*dev → workers.dev)
-    // Only replace * that appear between word characters in the host portion,
-    // not in the query string where they could be legitimate wildcards.
-    $url = preg_replace_callback(
-        '#^(https?://)([^/?#]+)#i',
-        fn($m) => $m[1] . str_replace('*', '.', $m[2]),
-        $url
-    );
-
-    // Strip any trailing whitespace or invisible chars
-    $url = rtrim($url);
-
+    if (preg_match('@^(https?://)([^/?#]+)(.*)$@i', $url, $m)) {
+        return $m[1] . str_replace('*', '.', $m[2]) . $m[3];
+    }
     return $url;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Parse a raw M3U8 text into server entries
+// Detect whether a response body is an M3U8 playlist
 // ─────────────────────────────────────────────────────────────────────────────
-function parseM3u8(string $body, string $defaultGroup = 'Live'): array {
+function isM3u8Response(string $body, string $ctype, string $url): bool {
+    if (stripos($ctype, 'mpegurl')        !== false) return true;
+    if (stripos($ctype, 'vnd.apple')      !== false) return true;
+    $trimmed = ltrim($body);
+    if (stripos($trimmed, '#EXTM3U')      === 0)     return true;
+    if (stripos($trimmed, '#EXT-X-')      === 0)     return true;
+    if (preg_match('/\.m3u8(\?|$)/i', parse_url($url, PHP_URL_PATH) ?? '')) return true;
+    return false;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Parse a raw M3U8 master playlist into an array of server entries
+// ─────────────────────────────────────────────────────────────────────────────
+function parseMasterM3u8(string $body, string $defaultGroup = 'Live'): array {
     $lines   = preg_split('/\r?\n/', trim($body));
     $servers = [];
-    $pending = ['name' => null, 'group' => $defaultGroup, 'logo' => ''];
+    $pending = ['name' => '', 'group' => $defaultGroup, 'logo' => ''];
 
     foreach ($lines as $line) {
         $line = trim($line);
@@ -110,40 +117,32 @@ function parseM3u8(string $body, string $defaultGroup = 'Live'): array {
             $group = $defaultGroup;
             $logo  = '';
 
-            if (preg_match('/tvg-name=["\']([^"\']+)["\']/i', $line, $m)) {
-                $name = $m[1];
-            }
-            if (preg_match('/group-title=["\']([^"\']+)["\']/i', $line, $m)) {
-                $group = $m[1];
-            }
-            if (preg_match('/tvg-logo=["\']([^"\']+)["\']/i', $line, $m)) {
-                $logo = $m[1];
-            }
-            if ($name === '' && preg_match('/,(.+)$/', $line, $m)) {
-                $name = trim($m[1]);
-            }
+            if (preg_match('/tvg-name=["\']([^"\']+)["\']/i', $line, $m))    $name  = $m[1];
+            if (preg_match('/group-title=["\']([^"\']+)["\']/i', $line, $m)) $group = $m[1];
+            if (preg_match('/tvg-logo=["\']([^"\']+)["\']/i', $line, $m))    $logo  = $m[1];
+            if ($name === '' && preg_match('/,(.+)$/', $line, $m))           $name  = trim($m[1]);
 
             $pending = [
-                'name'  => $name ?: ('Server ' . (count($servers) + 1)),
-                'group' => $group,
+                'name'  => $name  ?: ('Server ' . (count($servers) + 1)),
+                'group' => $group ?: $defaultGroup,
                 'logo'  => $logo,
             ];
             continue;
         }
 
-        // URL line — sanitise first, then validate
         if ($line[0] !== '#') {
-            $clean = sanitiseM3u8Url($line);
+            $clean = sanitiseUrl($line);
             if (filter_var($clean, FILTER_VALIDATE_URL)) {
                 $servers[] = [
-                    'name'      => $pending['name']  ?? ('Server ' . (count($servers) + 1)),
-                    'group'     => $pending['group'] ?? $defaultGroup,
+                    'name'      => $pending['name']  ?: ('Server ' . (count($servers) + 1)),
+                    'group'     => $pending['group'] ?: $defaultGroup,
                     'logo'      => $pending['logo']  ?? '',
                     'raw_url'   => $clean,
                     'proxy_url' => 'proxy.php?url=' . rawurlencode($clean) . '&raw=true',
                 ];
-                $pending = ['name' => null, 'group' => $defaultGroup, 'logo' => ''];
             }
+            // Reset regardless — each URL line consumes the pending metadata
+            $pending = ['name' => '', 'group' => $defaultGroup, 'logo' => ''];
         }
     }
 
@@ -151,122 +150,167 @@ function parseM3u8(string $body, string $defaultGroup = 'Live'): array {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SOURCE 1 — fifalive.click (primary)
-// Returns raw M3U8 playlist containing CDN-signed stream URLs
+// Validate that a server URL actually returns a playable M3U8 right now.
+// Returns true/false + a debug message.
 // ─────────────────────────────────────────────────────────────────────────────
-function fetchFifalive(): array {
-    $ch   = makeCurlHandle('https://fifalive.click/', [
-        'referer' => 'https://fifalive.click/',
-        'origin'  => 'https://fifalive.click',
-        'accept'  => 'application/vnd.apple.mpegurl, application/x-mpegurl, */*',
-    ]);
-    $body = curl_exec($ch);
-    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $ctype = curl_getinfo($ch, CURLINFO_CONTENT_TYPE) ?: '';
-    $err  = curl_error($ch);
-    curl_close($ch);
+function validateServer(array $server): array {
+    $r = curlGet($server['raw_url'], [], 10);
 
-    if ($body === false || $body === '') {
-        return ['ok' => false, 'error' => 'fifalive: cURL failed — ' . $err];
-    }
-    if ($code < 200 || $code >= 300) {
-        return ['ok' => false, 'error' => "fifalive: HTTP $code"];
+    if (!$r['ok']) {
+        return [false, "HTTP {$r['code']} / cURL: {$r['err']}"];
     }
 
-    // Detect paywall — if we got HTML back instead of M3U8, the JS paywall triggered
-    $isM3u8 = stripos($ctype, 'mpegurl') !== false
-           || stripos(ltrim($body), '#EXTM3U') === 0;
+    $body = (string)($r['body'] ?? '');
+    if (!isM3u8Response($body, $r['ctype'], $r['final'])) {
+        $preview = substr(str_replace(["\r","\n"], ' ', $body), 0, 100);
+        return [false, "Not M3U8 (CT={$r['ctype']}) preview=$preview"];
+    }
 
-    if (!$isM3u8) {
-        // Check for the Bengali paywall text or any HTML tag
-        if (stripos($body, '<html') !== false || stripos($body, 'প্রিমিয়াম') !== false) {
-            return ['ok' => false, 'error' => 'fifalive: paywall active (Facebook follow gate detected)'];
+    // Check it has at least one playable segment line
+    $lines = preg_split('/\r?\n/', $body);
+    foreach ($lines as $l) {
+        $l = trim($l);
+        if ($l !== '' && $l[0] !== '#' && strlen($l) > 5) {
+            return [true, "OK — first segment: " . substr($l, 0, 80)];
         }
-        return ['ok' => false, 'error' => 'fifalive: unexpected content-type — ' . $ctype];
     }
 
-    $servers = parseM3u8($body, 'FIFA Live');
-
-    if (empty($servers)) {
-        return ['ok' => false, 'error' => 'fifalive: M3U8 parsed but no URLs found', 'raw' => substr($body, 0, 300)];
-    }
-
-    return ['ok' => true, 'source' => 'fifalive', 'servers' => $servers];
+    return [false, 'M3U8 has no segment lines'];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SOURCE 2 — Retry fifalive with VLC user-agent
-// Sometimes the CDN/Cloudflare serves the M3U8 only to non-browser UAs.
-// This is a cheap second attempt before we give up.
-// ─────────────────────────────────────────────────────────────────────────────
-function fetchFifaliveVlc(): array {
-    $ch = makeCurlHandle('https://fifalive.click/', [
-        'ua'      => 'VLC/3.0.21 LibVLC/3.0.21',
-        'referer' => 'https://fifalive.click/',
-        'origin'  => 'https://fifalive.click',
-        'accept'  => 'application/vnd.apple.mpegurl, application/x-mpegurl, */*',
-        'timeout' => 12,
-    ]);
-    $body  = curl_exec($ch);
-    $code  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $ctype = curl_getinfo($ch, CURLINFO_CONTENT_TYPE) ?: '';
-    $err   = curl_error($ch);
-    curl_close($ch);
-
-    if ($body === false || $body === '' || $code < 200 || $code >= 300) {
-        return ['ok' => false, 'error' => "fifalive(VLC): HTTP $code / $err"];
-    }
-
-    $isM3u8 = stripos($ctype, 'mpegurl') !== false
-           || stripos(ltrim($body), '#EXTM3U') === 0;
-
-    if (!$isM3u8) {
-        return ['ok' => false, 'error' => 'fifalive(VLC): not M3U8 — CT=' . $ctype];
-    }
-
-    $servers = parseM3u8($body, 'FIFA Live');
-    if (empty($servers)) {
-        return ['ok' => false, 'error' => 'fifalive(VLC): no URLs found'];
-    }
-
-    return ['ok' => true, 'source' => 'fifalive-vlc', 'servers' => $servers];
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Main fallback chain
+// MAIN — fetch master, parse, validate, return JSON
 // ─────────────────────────────────────────────────────────────────────────────
 $errors  = [];
-$results = null;
+$servers = [];
 
-// Try Source 1: standard browser UA
-$r1 = fetchFifalive();
-if ($r1['ok']) {
-    $results = $r1;
+// ── Step 1: Fetch the master M3U8 from fifalive.click ────────────────────────
+$master = curlGet(SOURCE_URL);
+
+if (!$master['ok']) {
+    $errors[] = 'Master fetch failed: HTTP ' . $master['code'] . ' / ' . $master['err'];
 } else {
-    $errors[] = $r1['error'];
+    $body  = (string)($master['body'] ?? '');
+    $ctype = $master['ctype'];
 
-    // Try Source 2: VLC UA (some CDN configs serve differently to media players)
-    $r2 = fetchFifaliveVlc();
-    if ($r2['ok']) {
-        $results = $r2;
+    if (!isM3u8Response($body, $ctype, SOURCE_URL)) {
+        // Likely paywall HTML — log a meaningful error
+        if (stripos($body, '<html') !== false) {
+            $errors[] = 'fifalive returned HTML (paywall/redirect active). CT=' . $ctype;
+        } else {
+            $errors[] = 'fifalive returned non-M3U8 content. CT=' . $ctype . ' body_start=' . substr($body, 0, 80);
+        }
     } else {
-        $errors[] = $r2['error'];
+        // ── Step 2: Parse all server entries from the master playlist ─────────
+        $parsed = parseMasterM3u8($body, 'FIFA Live');
+
+        if (empty($parsed)) {
+            $errors[] = 'Master M3U8 parsed but contained no server URLs. body_start=' . substr($body, 0, 200);
+        } else {
+            // ── Step 3: Validate each server (parallel cURL multi-exec) ──────
+            // We use curl_multi so all 4 servers are checked simultaneously
+            // instead of sequentially (which would add ~40s of timeout waits).
+            $mh      = curl_multi_init();
+            $handles = [];
+
+            foreach ($parsed as $i => $srv) {
+                $ch = curl_init($srv['raw_url']);
+                curl_setopt_array($ch, [
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_FOLLOWLOCATION => true,
+                    CURLOPT_MAXREDIRS      => 4,
+                    CURLOPT_USERAGENT      => UA_BROWSER,
+                    CURLOPT_SSL_VERIFYPEER => false,
+                    CURLOPT_SSL_VERIFYHOST => 0,
+                    CURLOPT_CONNECTTIMEOUT => 6,
+                    CURLOPT_TIMEOUT        => 10,
+                    CURLOPT_ENCODING       => '',
+                    CURLOPT_HTTPHEADER     => [
+                        'Accept: application/vnd.apple.mpegurl, application/x-mpegurl, */*',
+                        'Accept-Language: en-US,en;q=0.9',
+                        'Referer: ' . SOURCE_URL,
+                        'Origin: https://fifalive.click',
+                        'Cache-Control: no-cache',
+                    ],
+                ]);
+                curl_multi_add_handle($mh, $ch);
+                $handles[$i] = $ch;
+            }
+
+            // Execute all handles concurrently
+            $running = null;
+            do {
+                curl_multi_exec($mh, $running);
+                curl_multi_select($mh, 0.5);
+            } while ($running > 0);
+
+            // Collect results
+            foreach ($parsed as $i => $srv) {
+                $ch      = $handles[$i];
+                $rbody   = (string)(curl_multi_getcontent($ch) ?? '');
+                $rcode   = (int)   curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $rctype  = (string)curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+                $rfinal  = (string)curl_getinfo($ch, CURLINFO_EFFECTIVE_URL) ?: $srv['raw_url'];
+                $rerr    = curl_error($ch);
+                curl_multi_remove_handle($mh, $ch);
+                curl_close($ch);
+
+                if ($rcode < 200 || $rcode >= 300) {
+                    $errors[] = "{$srv['name']}: HTTP $rcode" . ($rerr ? " / $rerr" : '');
+                    continue;
+                }
+
+                if (!isM3u8Response($rbody, $rctype, $rfinal)) {
+                    $errors[] = "{$srv['name']}: not M3U8 (CT=$rctype)";
+                    continue;
+                }
+
+                // Has at least one segment line?
+                $hasSegment = false;
+                foreach (preg_split('/\r?\n/', $rbody) as $l) {
+                    $l = trim($l);
+                    if ($l !== '' && $l[0] !== '#' && strlen($l) > 5) {
+                        $hasSegment = true;
+                        break;
+                    }
+                }
+
+                if (!$hasSegment) {
+                    $errors[] = "{$srv['name']}: M3U8 has no segment lines";
+                    continue;
+                }
+
+                // ✅ Server is live and playable
+                $servers[] = $srv;
+            }
+
+            curl_multi_close($mh);
+        }
     }
 }
 
-if ($results !== null) {
-    // Append fallback at the end so users always have something to try
-    $results['servers'][] = $FALLBACK_SERVERS[0];
-    $results['errors']    = $errors;   // include any non-fatal errors for debugging
-    echo json_encode($results, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+// ── Always append fallback so the player is never completely stuck ────────────
+$servers[] = $FALLBACK;
+
+// ── Build response ────────────────────────────────────────────────────────────
+$liveCount = count($servers) - 1; // subtract the fallback
+
+if ($liveCount > 0) {
+    echo json_encode([
+        'ok'      => true,
+        'source'  => 'fifalive',
+        'count'   => $liveCount,
+        'servers' => $servers,
+        'errors'  => $errors,    // non-fatal: some servers may have failed validation
+    ], JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
 } else {
-    // All live sources failed — return fallback-only response
-    // This is still "ok" from the player's perspective (it will show the test stream)
+    // All live sources failed — fallback only
     echo json_encode([
         'ok'      => true,
         'source'  => 'fallback',
-        'warning' => 'All live sources failed. Showing test stream. Errors: ' . implode(' | ', $errors),
+        'count'   => 0,
+        'warning' => 'All live sources are currently offline. Showing test stream. Errors: ' . implode(' | ', $errors),
         'errors'  => $errors,
-        'servers' => $FALLBACK_SERVERS,
+        'servers' => $servers,
     ], JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
 }
