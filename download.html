@@ -9,8 +9,24 @@
         .container { background: rgba(255, 255, 255, 0.05); padding: 40px 30px; border-radius: 20px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); max-width: 400px; width: 90%; }
         h1 { font-size: 2.8em; margin-bottom: 5px; background: -webkit-linear-gradient(#00d2ff, #3a7bd5); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800; }
         p.subtitle { font-size: 1.1em; line-height: 1.5; margin-bottom: 30px; color: #cfd8dc; }
-        .download-btn { display: inline-block; background: linear-gradient(to right, #00d2ff, #3a7bd5); color: white; text-decoration: none; padding: 16px 35px; font-size: 1.3em; font-weight: bold; border-radius: 50px; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(0, 210, 255, 0.4); margin-bottom: 20px; }
-        .download-btn:hover { transform: translateY(-3px) scale(1.05); box-shadow: 0 8px 25px rgba(0, 210, 255, 0.6); }
+        .download-btn { display: block; background: linear-gradient(to right, #00d2ff, #3a7bd5); color: white; text-decoration: none; padding: 16px 20px; font-size: 1.25em; font-weight: bold; border-radius: 50px; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(0, 210, 255, 0.4); margin-bottom: 12px; }
+        .download-btn:hover { transform: translateY(-3px) scale(1.03); box-shadow: 0 8px 25px rgba(0, 210, 255, 0.6); }
+        
+        .pc-download-btn { display: block; background: linear-gradient(to right, #0f2027, #203a43, #2c5364); color: white; text-decoration: none; padding: 16px 20px; font-size: 1.25em; font-weight: bold; border-radius: 50px; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(44, 83, 100, 0.4); margin-bottom: 25px; border: 1px solid rgba(255, 255, 255, 0.1); }
+        .pc-download-btn:hover { transform: translateY(-3px) scale(1.03); box-shadow: 0 8px 25px rgba(44, 83, 100, 0.6); }
+        
+        .promo-btn { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 20px; border-radius: 50px; text-decoration: none; color: #fff; font-size: 1.05em; font-weight: 700; transition: all 0.3s ease; margin-bottom: 12px; border: 1px solid rgba(255, 255, 255, 0.08); }
+        .promo-btn:hover { transform: translateY(-2px); }
+        .promo-btn:active { transform: scale(0.98); }
+        
+        #promo-tickets { background: linear-gradient(135deg, #ef4444, #f59e0b); border-color: rgba(245, 158, 11, 0.5); box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4); animation: goldRedPulse 2s infinite alternate; }
+        #promo-merch { background: linear-gradient(135deg, #10b981, #3b82f6); border-color: rgba(16, 185, 129, 0.4); box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4); }
+        
+        @keyframes goldRedPulse {
+            0% { box-shadow: 0 0 4px rgba(245, 158, 11, 0.3); }
+            100% { box-shadow: 0 0 15px rgba(239, 68, 68, 0.6); }
+        }
+        
         .features { text-align: left; margin-top: 20px; margin-bottom: 25px; background: rgba(0, 0, 0, 0.2); padding: 15px 20px; border-radius: 12px; }
         .features ul { list-style: none; padding: 0; margin: 0; }
         .features li { margin-bottom: 12px; font-size: 0.95em; color: #eceff1; display: flex; align-items: center; }
@@ -24,7 +40,13 @@
         <h1>TCTV</h1>
         <p class="subtitle">Watch Live Sports, Movies & Premium TV Channels for FREE!</p>
         
-        <a href="tctv.apk" class="download-btn">⬇ Download APK</a>
+        <a href="tctv.apk" class="download-btn">⬇ Download APK (Android)</a>
+        <a href="https://techandclick.site/iptv/tctv.exe" class="pc-download-btn">💻 Download for PC (Windows)</a>
+        
+        <div id="promo-section" style="margin: 20px 0 10px;">
+            <a id="promo-tickets" class="promo-btn" href="https://omg10.com/4/11017767" target="_blank" rel="noopener">🎟️ Win VIP World Cup Tickets!</a>
+            <a id="promo-merch" class="promo-btn" href="https://www.effectivecpmnetwork.com/mgtqwzbp?key=5c4003e0ae2b0ebd387daded087bc9aa" target="_blank" rel="noopener">🎁 Claim Free FIFA Merchandise!</a>
+        </div>
 
         <div class="ad-banner" id="banner-ad"></div>
         
@@ -37,7 +59,7 @@
             </ul>
         </div>
         
-        <p class="footer-text">Version: 1.0 | File Size: ~8.8 MB | OS: Android</p>
+        <p class="footer-text">Version: 1.0 | File Size: ~8.8 MB (APK) / ~45 MB (EXE) | OS: Android &amp; Windows</p>
     </div>
 
     <script>
