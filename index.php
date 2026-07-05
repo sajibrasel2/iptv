@@ -167,6 +167,28 @@ body{
   animation:livePulse 1.4s ease-in-out infinite;
 }
 
+/* ── Player Watermark Logo ────────────────────────────────────── */
+#player-watermark {
+  position: absolute;
+  bottom: 52px;
+  right: 15px;
+  height: 25px;
+  width: auto;
+  opacity: 0.4;
+  z-index: 7;
+  pointer-events: none;
+  user-select: none;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+  transition: opacity 0.35s;
+}
+#video-wrap:not(:hover):not(.controls-locked) #player-watermark {
+  opacity: 0.25; /* dimmer when controls are hidden to stay non-intrusive */
+}
+#video-wrap.controls-locked #player-watermark,
+#video-wrap:hover #player-watermark {
+  opacity: 0.55;
+}
+
 /* ── In-player server overlay ─────────────────────────────────── */
 #player-servers{
   position:absolute;top:12px;right:12px;z-index:8;
@@ -476,6 +498,9 @@ body{
 
           <!-- Source badge -->
           <div id="src-badge"></div>
+
+          <!-- Video Watermark Logo -->
+          <img id="player-watermark" src="t&amp;c.png" alt="Watermark">
 
           <!-- Custom controls (no timeline/duration) -->
           <div id="custom-controls">
