@@ -887,12 +887,21 @@ const TCTV = window.TCTV = {
   },
 
   attemptPlay() {
-    this.player.play().catch(e => {
-      // Modern browsers require unmuted autoplay to have a user gesture.
-      // If blocked, fallback to muted autoplay.
-      this.player.muted = true;
-      this.player.play().catch(() => {});
-    });
+    // Force muted autoplay on page load to bypass browser restrictions
+    this.player.muted = true;
+    this.ctrlVolume.value = 0;
+    this.ctrlMute.innerHTML = this.ICON_MUTE;
+    
+    const playPromise = this.player.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(err => {
+        console.warn('[autoplay blocked]', err);
+        // If still blocked, try again after a tiny delay
+        setTimeout(() => {
+          this.player.play().catch(() => {});
+        }, 100);
+      });
+    }
   },
 
   loadServer(idx){
