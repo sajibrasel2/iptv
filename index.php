@@ -277,6 +277,35 @@ body{
 }
 #promo-app .promo-icon{background:rgba(99,102,241,.2);color:#818cf8}
 
+/* Ticket Gold/Red Pulse Button */
+#promo-tickets {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(245, 158, 11, 0.2));
+  border-color: rgba(245, 158, 11, 0.45);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.15);
+  animation: goldRedPulse 2s infinite alternate;
+}
+#promo-tickets .promo-icon { background: rgba(245, 158, 11, 0.25); color: #f59e0b; font-size: 20px; }
+#promo-tickets .promo-title { color: #f59e0b; text-shadow: 0 0 8px rgba(245,158,11,0.3); }
+
+/* Merchandise Vibrant Green/Blue Button */
+#promo-merch {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(59, 130, 246, 0.15));
+  border-color: rgba(16, 185, 129, 0.4);
+}
+#promo-merch .promo-icon { background: rgba(16, 185, 129, 0.25); color: #10b981; font-size: 20px; }
+#promo-merch .promo-title { color: #10b981; }
+
+@keyframes goldRedPulse {
+  0% {
+    box-shadow: 0 0 4px rgba(245, 158, 11, 0.2);
+    border-color: rgba(245, 158, 11, 0.45);
+  }
+  100% {
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.45);
+    border-color: rgba(239, 68, 68, 0.7);
+  }
+}
+
 /* ── External server area (hidden — servers now shown on player) ── */
 #server-area{display:none}
 
@@ -501,6 +530,22 @@ body{
           <div class="promo-text">
             <div class="promo-title">Download our Mobile App</div>
             <div class="promo-sub">Watch live streams on the go</div>
+          </div>
+          <span class="promo-arrow">›</span>
+        </a>
+        <a id="promo-tickets" class="promo-btn" href="https://omg10.com/4/11017767" target="_blank" rel="noopener">
+          <div class="promo-icon">🎟️</div>
+          <div class="promo-text">
+            <div class="promo-title">Win VIP World Cup Tickets!</div>
+            <div class="promo-sub">Enter the giveaway draw now</div>
+          </div>
+          <span class="promo-arrow">›</span>
+        </a>
+        <a id="promo-merch" class="promo-btn" href="https://www.effectivecpmnetwork.com/mgtqwzbp?key=5c4003e0ae2b0ebd387daded087bc9aa" target="_blank" rel="noopener">
+          <div class="promo-icon">🎁</div>
+          <div class="promo-text">
+            <div class="promo-title">Claim Free FIFA Merchandise!</div>
+            <div class="promo-sub">Get jerseys, footballs, and gear</div>
           </div>
           <span class="promo-arrow">›</span>
         </a>
