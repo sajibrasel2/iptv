@@ -166,6 +166,12 @@ body{
   width:6px;height:6px;border-radius:50%;background:#fff;
   animation:livePulse 1.4s ease-in-out infinite;
 }
+#viewer-count{
+  margin-left:8px;padding-left:8px;
+  border-left:1px solid rgba(255,255,255,.3);
+  font-size:9px;font-weight:700;
+  opacity:.9;
+}
 
 /* ── Player Watermark Logo ────────────────────────────────────── */
 #player-watermark {
@@ -326,6 +332,35 @@ body{
     box-shadow: 0 0 15px rgba(239, 68, 68, 0.45);
     border-color: rgba(239, 68, 68, 0.7);
   }
+}
+
+/* ── Social share buttons ─────────────────────────────────────── */
+#share-area{
+  margin:10px 12px 8px;
+}
+#share-label{
+  font-size:11px;font-weight:700;color:#64748b;
+  margin-bottom:8px;letter-spacing:.05em;text-transform:uppercase;
+}
+.share-btns{
+  display:flex;gap:8px;
+}
+.share-btn{
+  flex:1;display:flex;align-items:center;justify-content:center;gap:8px;
+  padding:12px 16px;border-radius:14px;
+  text-decoration:none;font-size:13px;font-weight:700;
+  transition:transform .15s,box-shadow .2s;
+  border:1px solid rgba(255,255,255,.08);
+}
+.share-btn:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(0,0,0,.4)}
+.share-btn:active{transform:scale(.98)}
+#share-fb{
+  background:linear-gradient(135deg,rgba(24,119,242,.15),rgba(24,119,242,.05));
+  border-color:rgba(24,119,242,.25);color:#1877f2;
+}
+#share-wa{
+  background:linear-gradient(135deg,rgba(37,211,102,.15),rgba(37,211,102,.05));
+  border-color:rgba(37,211,102,.25);color:#25d366;
 }
 
 /* ── External server area (hidden — servers now shown on player) ── */
@@ -490,8 +525,11 @@ body{
         <div id="video-wrap">
           <video id="player" playsinline muted></video>
 
-          <!-- LIVE badge -->
-          <div id="player-live-badge"><div class="plb-dot"></div>LIVE</div>
+          <!-- LIVE badge with viewer count -->
+          <div id="player-live-badge">
+            <div class="plb-dot"></div>LIVE
+            <span id="viewer-count">👁️ 2.5K</span>
+          </div>
 
           <!-- In-player server buttons -->
           <div id="player-servers"></div>
@@ -574,6 +612,19 @@ body{
           </div>
           <span class="promo-arrow">›</span>
         </a>
+      </div>
+
+      <!-- Social share buttons -->
+      <div id="share-area">
+        <div id="share-label">📢 Share Live:</div>
+        <div class="share-btns">
+          <a id="share-fb" class="share-btn" href="https://www.facebook.com/sharer/sharer.php?u=https://techandclick.site/iptv/" target="_blank" rel="noopener">
+            <span>📘</span> Facebook
+          </a>
+          <a id="share-wa" class="share-btn" href="https://api.whatsapp.com/send?text=Watch%20Live%20Stream%20here:%20https://techandclick.site/iptv/" target="_blank" rel="noopener">
+            <span>💬</span> WhatsApp
+          </a>
+        </div>
       </div>
 
       <!-- Server selector -->
@@ -1067,9 +1118,36 @@ const TCTV = window.TCTV = {
     }, 55000); // every 55 seconds (cache TTL is 60s)
   },
 
+  // ── Viewer count simulator ──────────────────────────────────────────────────
+  startViewerCounter(){
+    const viewerEl = document.getElementById('viewer-count');
+    if(!viewerEl) return;
+
+    // Base count: 2.5K (2500)
+    let baseCount = 2500;
+    
+    const updateCount = () => {
+      // Random fluctuation: ±200 viewers
+      const variation = Math.floor(Math.random() * 400) - 200;
+      const newCount = baseCount + variation;
+      
+      // Format: 2.5K, 2.6K, etc.
+      const formatted = (newCount / 1000).toFixed(1) + 'K';
+      viewerEl.textContent = '👁️ ' + formatted;
+      
+      // Schedule next update (5-10 seconds)
+      const nextUpdate = 5000 + Math.random() * 5000;
+      setTimeout(updateCount, nextUpdate);
+    };
+    
+    // Start after 3 seconds
+    setTimeout(updateCount, 3000);
+  },
+
   // ── Init ────────────────────────────────────────────────────────────────────
   async init(){
     this.initControls();
+    this.startViewerCounter();  // Start viewer count simulation
 
     // WebView Detection logic — hide mobile app download button if already inside a WebView
     const ua = navigator.userAgent || navigator.vendor || window.opera;
