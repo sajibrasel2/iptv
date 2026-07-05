@@ -237,6 +237,46 @@ body{
   margin-top:6px;
 }
 
+/* ── Promo buttons (Telegram + App download) ─────────────────── */
+#promo-area{
+  margin:10px 12px 8px;display:flex;flex-direction:column;gap:8px;
+}
+.promo-btn{
+  display:flex;align-items:center;gap:10px;
+  padding:12px 16px;border-radius:14px;
+  text-decoration:none;color:#e2e8f0;
+  font-size:12px;font-weight:600;
+  transition:transform .15s,box-shadow .2s;
+  border:1px solid rgba(255,255,255,.08);
+}
+.promo-btn:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(0,0,0,.4)}
+.promo-btn:active{transform:scale(.98)}
+.promo-btn .promo-icon{
+  width:36px;height:36px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;font-size:18px;
+}
+.promo-btn .promo-text{flex:1;min-width:0}
+.promo-btn .promo-title{font-size:13px;font-weight:700;color:#f1f5f9}
+.promo-btn .promo-sub{font-size:10px;color:#94a3b8;margin-top:2px}
+.promo-btn .promo-arrow{
+  color:#64748b;font-size:16px;font-weight:700;flex-shrink:0;
+  transition:transform .2s;
+}
+.promo-btn:hover .promo-arrow{transform:translateX(3px)}
+
+#promo-telegram{
+  background:linear-gradient(135deg,rgba(0,136,204,.15),rgba(0,136,204,.05));
+  border-color:rgba(0,136,204,.25);
+}
+#promo-telegram .promo-icon{background:rgba(0,136,204,.2);color:#0088cc}
+
+#promo-app{
+  background:linear-gradient(135deg,rgba(99,102,241,.12),rgba(59,130,246,.06));
+  border-color:rgba(99,102,241,.2);
+}
+#promo-app .promo-icon{background:rgba(99,102,241,.2);color:#818cf8}
+
 /* ── External server area (hidden — servers now shown on player) ── */
 #server-area{display:none}
 
@@ -444,6 +484,26 @@ body{
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- Promo buttons -->
+      <div id="promo-area">
+        <a id="promo-telegram" class="promo-btn" href="https://t.me/getlatestmovienew" target="_blank" rel="noopener">
+          <div class="promo-icon">✈️</div>
+          <div class="promo-text">
+            <div class="promo-title">Join our Telegram Channel</div>
+            <div class="promo-sub">For a buffer-free streaming experience</div>
+          </div>
+          <span class="promo-arrow">›</span>
+        </a>
+        <a id="promo-app" class="promo-btn" href="https://techandclick.site/iptv/download.html" target="_blank" rel="noopener">
+          <div class="promo-icon">📲</div>
+          <div class="promo-text">
+            <div class="promo-title">Download our Mobile App</div>
+            <div class="promo-sub">Watch live streams on the go</div>
+          </div>
+          <span class="promo-arrow">›</span>
+        </a>
       </div>
 
       <!-- Server selector -->
@@ -756,6 +816,15 @@ const TCTV = window.TCTV = {
     return hls;
   },
 
+  attemptPlay() {
+    this.player.play().catch(e => {
+      // Modern browsers require unmuted autoplay to have a user gesture.
+      // If blocked, fallback to muted autoplay.
+      this.player.muted = true;
+      this.player.play().catch(() => {});
+    });
+  },
+
   loadServer(idx){
     if(!this.servers[idx])return;
     this.currentIdx=idx;
@@ -771,9 +840,7 @@ const TCTV = window.TCTV = {
     if(Hls.isSupported()){
       const onManifest = () => {
         this.hideSpinner();
-        this.player.play().catch(e=>{
-          if(e.name==='NotAllowedError'){ this.player.muted=true; this.player.play().catch(()=>{}); }
-        });
+        this.attemptPlay();
         this.setBadge(srv.name);
       };
 
@@ -792,7 +859,9 @@ const TCTV = window.TCTV = {
       // Native HLS (iOS Safari)
       this.player.src = srv.proxy_url;
       this.player.addEventListener('loadedmetadata',()=>{
-        this.hideSpinner(); this.player.play().catch(()=>{}); this.setBadge(srv.name);
+        this.hideSpinner();
+        this.attemptPlay();
+        this.setBadge(srv.name);
       },{once:true});
       this.player.addEventListener('error',()=>{
         this.failedServers.add(idx); this.markFailed(idx);
@@ -922,6 +991,17 @@ const TCTV = window.TCTV = {
   // ── Init ────────────────────────────────────────────────────────────────────
   async init(){
     this.initControls();
+
+    // WebView Detection logic — hide mobile app download button if already inside a WebView
+    const ua = navigator.userAgent || navigator.vendor || window.opera;
+    const isWebView = /wv|WebView|FBAN|FBAV|Instagram/i.test(ua) || 
+                      (/Android/i.test(ua) && /Version\/[0-9.]+/i.test(ua) && !/Chrome\/\d+/i.test(ua)) ||
+                      (/iPhone|iPad|iPod/i.test(ua) && !/Safari/i.test(ua));
+    if(isWebView){
+      const appBtn = $('promo-app');
+      if(appBtn) appBtn.style.display = 'none';
+    }
+
     this.showSpinner('Fetching stream list…','');
 
     // Hard 8-second timeout — never spin forever waiting for stream.php

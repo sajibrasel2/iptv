@@ -174,7 +174,11 @@ function fetchSource(): array {
 
 function readCache(): ?array {
     if (!file_exists(CACHE_FILE)) return null;
-    if ((time() - filemtime(CACHE_FILE)) > CACHE_TTL) return null;
+    if ((time() - filemtime(CACHE_FILE)) > CACHE_TTL) {
+        // Explicitly purge stale cache — forces a fresh scrape every time
+        @unlink(CACHE_FILE);
+        return null;
+    }
     $raw  = file_get_contents(CACHE_FILE);
     $data = $raw !== false ? json_decode($raw, true) : null;
     return (is_array($data) && !empty($data['entries'])) ? $data : null;
