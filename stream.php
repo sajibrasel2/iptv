@@ -311,14 +311,14 @@ if ($pdo !== null && !empty($scrapedEntries)) {
 }
 
 // ── Step 4: build final server list ──────────────────────────────────────────
-// Priority:  DB active rows (ordered by priority)
-//            then any scraped servers NOT already in the DB list
-//            then fallback
+// ONLY use freshly scraped servers from fifalive.click
+// DB servers are disabled to prevent stale/dead URLs from being served
 
 $servers  = [];
 $seenUrls = [];
 
-// 4a. DB-sourced servers (active, priority-ordered, freshly synced URLs)
+// 4a. DB-sourced servers — DISABLED (commented out to force fresh scrape only)
+/*
 if ($pdo !== null) {
     try {
         $dbServers = loadDbSources($pdo, $DB_ENCRYPT_KEY);
@@ -330,11 +330,12 @@ if ($pdo !== null) {
         $errors[] = 'DB read error: ' . $e->getMessage();
     }
 }
+*/
 
-// 4b. Scraped servers not already covered by a DB row
+// 4b. Scraped servers from fifalive.click (ONLY source now)
 foreach ($scrapedEntries as $i => $entry) {
     $clean = rtrim($entry['url'], '/');
-    if (in_array($clean, $seenUrls, true)) continue;  // already in list
+    if (in_array($clean, $seenUrls, true)) continue;  // skip duplicates
 
     $servers[] = [
         'name'      => $entry['name'],
@@ -346,7 +347,7 @@ foreach ($scrapedEntries as $i => $entry) {
     $seenUrls[] = $clean;
 }
 
-// 4c. Fallback removed — frontend shows a proper error when no servers available
+// 4c. Fallback removed — ONLY show live scraped servers
 
 // ── Step 5: response ──────────────────────────────────────────────────────────
 $liveCount  = count($servers);
@@ -356,7 +357,7 @@ $cachedAge  = ($fromCache && file_exists(CACHE_FILE))
 
 echo json_encode([
     'ok'         => $liveCount > 0,
-    'source'     => $liveCount > 0 ? 'db+fifalive' : 'none',
+    'source'     => $liveCount > 0 ? 'fifalive' : 'none',
     'count'      => $liveCount,
     'cached'     => $fromCache,
     'cached_age' => $cachedAge,
