@@ -114,8 +114,87 @@ body{
   box-shadow:0 20px 60px rgba(0,0,0,.6);
   position:relative;
 }
-#video-wrap{position:relative;width:100%;aspect-ratio:16/9;background:#000}
+#video-wrap{position:relative;width:100%;aspect-ratio:16/9;background:#000;cursor:pointer}
 #player{width:100%;height:100%;display:block;background:#000}
+
+/* ── Custom video controls ────────────────────────────────────── */
+#custom-controls{
+  position:absolute;bottom:0;left:0;right:0;z-index:8;
+  display:flex;align-items:center;gap:8px;
+  padding:10px 14px;
+  background:linear-gradient(0deg,rgba(0,0,0,.85) 0%,transparent 100%);
+  opacity:1;transition:opacity .35s;
+}
+#video-wrap:not(:hover):not(.controls-locked) #custom-controls{opacity:0}
+#video-wrap.controls-locked #custom-controls{opacity:1}
+.ctrl-btn{
+  background:none;border:none;color:#fff;cursor:pointer;
+  padding:4px;display:flex;align-items:center;justify-content:center;
+  opacity:.9;transition:opacity .2s,transform .15s;
+}
+.ctrl-btn:hover{opacity:1;transform:scale(1.1)}
+.ctrl-btn svg{width:22px;height:22px;fill:#fff}
+#ctrl-play svg{width:26px;height:26px}
+.ctrl-spacer{flex:1}
+#ctrl-volume-wrap{display:flex;align-items:center;gap:4px}
+#ctrl-volume{
+  -webkit-appearance:none;appearance:none;
+  width:60px;height:3px;border-radius:2px;
+  background:rgba(255,255,255,.25);outline:none;
+  cursor:pointer;transition:width .2s;
+}
+#ctrl-volume::-webkit-slider-thumb{
+  -webkit-appearance:none;width:12px;height:12px;
+  border-radius:50%;background:#fff;cursor:pointer;
+}
+#ctrl-volume::-moz-range-thumb{
+  width:12px;height:12px;border:none;
+  border-radius:50%;background:#fff;cursor:pointer;
+}
+
+/* ── In-player LIVE badge ─────────────────────────────────────── */
+#player-live-badge{
+  position:absolute;top:12px;left:12px;z-index:8;
+  display:flex;align-items:center;gap:5px;
+  background:rgba(220,38,38,.9);border-radius:4px;
+  padding:3px 8px;font-size:10px;font-weight:800;
+  color:#fff;letter-spacing:.06em;text-transform:uppercase;
+  box-shadow:0 2px 10px rgba(220,38,38,.4);
+  pointer-events:none;
+}
+#player-live-badge .plb-dot{
+  width:6px;height:6px;border-radius:50%;background:#fff;
+  animation:livePulse 1.4s ease-in-out infinite;
+}
+
+/* ── In-player server overlay ─────────────────────────────────── */
+#player-servers{
+  position:absolute;top:12px;right:12px;z-index:8;
+  display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;
+  max-width:70%;
+  opacity:1;transition:opacity .35s;
+}
+#video-wrap:not(:hover):not(.controls-locked) #player-servers{opacity:0}
+#video-wrap.controls-locked #player-servers{opacity:1}
+.psrv-btn{
+  padding:5px 12px;border-radius:6px;
+  border:1px solid rgba(255,255,255,.2);
+  background:rgba(0,0,0,.55);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  color:rgba(255,255,255,.85);font-size:11px;font-weight:700;
+  cursor:pointer;white-space:nowrap;
+  transition:all .2s;display:flex;align-items:center;gap:5px;
+}
+.psrv-btn:hover{background:rgba(59,130,246,.4);border-color:rgba(96,165,250,.5)}
+.psrv-btn.active{
+  background:rgba(59,130,246,.85);border-color:rgba(99,102,241,.7);
+  color:#fff;box-shadow:0 2px 12px rgba(59,130,246,.4);
+}
+.psrv-btn .psrv-dot{
+  width:5px;height:5px;border-radius:50%;
+  background:rgba(255,255,255,.4);
+}
+.psrv-btn.active .psrv-dot{background:#fff}
 
 /* ── Overlay states (spinner / error) ────────────────────────── */
 .overlay{
@@ -158,84 +237,12 @@ body{
   margin-top:6px;
 }
 
-/* ── Server selector area ─────────────────────────────────────── */
-#server-area{padding:0 12px 8px}
-#server-label-row{
-  display:flex;align-items:baseline;justify-content:space-between;
-  margin-bottom:8px;
-}
-#server-label{font-size:10px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:.08em}
-#cache-age{font-size:9px;color:#334155;font-weight:500}
-#server-scroll{
-  display:flex;gap:8px;overflow-x:auto;
-  padding:2px 0 8px;scroll-snap-type:x mandatory;
-  -webkit-overflow-scrolling:touch;
-}
-.srv-pill{
-  scroll-snap-align:start;flex-shrink:0;
-  padding:8px 16px;border-radius:20px;
-  border:1px solid rgba(148,163,184,.15);
-  background:rgba(15,23,42,.6);
-  color:#94a3b8;font-size:12px;font-weight:600;
-  cursor:pointer;white-space:nowrap;
-  transition:all .2s;
-  display:flex;align-items:center;gap:6px;
-  position:relative;
-}
-.srv-pill:hover{background:rgba(59,130,246,.1);border-color:rgba(96,165,250,.3)}
-.srv-pill.active{
-  background:linear-gradient(135deg,rgba(59,130,246,.9),rgba(99,102,241,.9));
-  color:#fff;border-color:rgba(99,102,241,.5);
-  box-shadow:0 4px 20px rgba(59,130,246,.35);
-}
-.srv-pill.failed{
-  opacity:.45;cursor:not-allowed;
-  text-decoration:line-through;
-}
-.srv-pill .pill-dot{
-  width:6px;height:6px;border-radius:50%;
-  background:rgba(255,255,255,.3);flex-shrink:0;
-}
-.srv-pill.active .pill-dot{background:rgba(255,255,255,.9)}
-.srv-pill.failed .pill-dot{background:#ef4444}
-.srv-group{
-  font-size:9px;font-weight:500;
-  background:rgba(0,0,0,.25);
-  padding:1px 5px;border-radius:4px;
-  color:rgba(255,255,255,.5);margin-left:2px;
-}
+/* ── External server area (hidden — servers now shown on player) ── */
+#server-area{display:none}
 
-/* ── Desktop server pills — compact, wrap, no scroll ─────────── */
+/* ── Desktop: widen app shell ─────────────────────────────────── */
 @media (min-width:768px){
-  /* Widen the app shell so all pills fit comfortably */
   #app{max-width:860px}
-
-  #server-scroll{
-    flex-wrap:wrap;          /* pills wrap instead of scrolling   */
-    overflow-x:visible;      /* no horizontal scrollbar on desktop */
-    scroll-snap-type:none;
-    padding:2px 0 4px;
-    gap:6px;
-  }
-
-  /* Smaller, tighter pills on desktop */
-  .srv-pill{
-    scroll-snap-align:none;
-    flex-shrink:1;           /* allow shrink so they share the row  */
-    padding:5px 12px;
-    border-radius:14px;
-    font-size:11px;
-    gap:5px;
-  }
-
-  .srv-pill .pill-dot{
-    width:5px;height:5px;
-  }
-
-  .srv-group{
-    font-size:8px;
-    padding:1px 4px;
-  }
 }
 
 /* ── Manual URL input panel ───────────────────────────────────── */
@@ -390,8 +397,33 @@ body{
       <!-- Video card -->
       <div id="video-card">
         <div id="video-wrap">
-          <video id="player" controls playsinline autoplay muted></video>
+          <video id="player" playsinline autoplay muted></video>
+
+          <!-- LIVE badge -->
+          <div id="player-live-badge"><div class="plb-dot"></div>LIVE</div>
+
+          <!-- In-player server buttons -->
+          <div id="player-servers"></div>
+
+          <!-- Source badge -->
           <div id="src-badge"></div>
+
+          <!-- Custom controls (no timeline/duration) -->
+          <div id="custom-controls">
+            <button class="ctrl-btn" id="ctrl-play" title="Play / Pause">
+              <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            </button>
+            <div id="ctrl-volume-wrap">
+              <button class="ctrl-btn" id="ctrl-mute" title="Mute / Unmute">
+                <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3z"/><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/><path d="M19 12c0 2.76-1.61 5.13-3.93 6.28V20.4C18.19 19.14 21 15.88 21 12s-2.81-7.14-5.93-8.4v2.12A7.998 7.998 0 0119 12z"/></svg>
+              </button>
+              <input type="range" id="ctrl-volume" min="0" max="1" step="0.05" value="0">
+            </div>
+            <div class="ctrl-spacer"></div>
+            <button class="ctrl-btn" id="ctrl-fullscreen" title="Fullscreen">
+              <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+            </button>
+          </div>
 
           <!-- Spinner -->
           <div id="spin-overlay" class="overlay">
@@ -517,10 +549,13 @@ const TCTV = window.TCTV = {
   failedServers: new Set(),
   autoSwitchTimer: null,
   autoSwitchCountdown: null,
+  refreshTimer: null,
+  controlsTimeout: null,
   customChannelsFromPHP: <?= $customChannelsJson ?>,
 
   // ── DOM refs ────────────────────────────────────────────────────────────────
   player: $('player'),
+  videoWrap: $('video-wrap'),
   spinOverlay: $('spin-overlay'),
   spinLabel: $('spin-label'),
   spinSource: $('spin-source'),
@@ -529,6 +564,7 @@ const TCTV = window.TCTV = {
   errSub: $('err-sub'),
   autoSwitch: $('auto-switch'),
   serverScroll: $('server-scroll'),
+  playerServers: $('player-servers'),
   cacheAge:     $('cache-age'),
   srcBadge: $('src-badge'),
   warnBar: $('warn-bar'),
@@ -540,6 +576,17 @@ const TCTV = window.TCTV = {
   customToggle: $('custom-toggle'),
   customBody: $('custom-body'),
   customUrl: $('custom-url'),
+  // Custom controls
+  ctrlPlay: $('ctrl-play'),
+  ctrlMute: $('ctrl-mute'),
+  ctrlVolume: $('ctrl-volume'),
+  ctrlFullscreen: $('ctrl-fullscreen'),
+
+  // ── SVG icons for play/pause and mute ───────────────────────────────────────
+  ICON_PLAY:  '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>',
+  ICON_PAUSE: '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>',
+  ICON_VOL:   '<svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3z"/><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/><path d="M19 12c0 2.76-1.61 5.13-3.93 6.28V20.4C18.19 19.14 21 15.88 21 12s-2.81-7.14-5.93-8.4v2.12A7.998 7.998 0 0119 12z"/></svg>',
+  ICON_MUTE:  '<svg viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>',
 
   // ── UI helpers ──────────────────────────────────────────────────────────────
   showSpinner(label='Loading stream…',src=''){
@@ -561,6 +608,80 @@ const TCTV = window.TCTV = {
   hideBadge(){this.srcBadge.classList.remove('visible')},
   setWarning(text){this.warnText.textContent=text;this.warnBar.classList.add('visible')},
   hideWarning(){this.warnBar.classList.remove('visible')},
+
+  // ── Custom controls logic ──────────────────────────────────────────────────
+  initControls(){
+    const v = this.player;
+
+    // Show controls on interaction, auto-hide after 3s
+    const showControls = () => {
+      this.videoWrap.classList.add('controls-locked');
+      clearTimeout(this.controlsTimeout);
+      this.controlsTimeout = setTimeout(() => {
+        this.videoWrap.classList.remove('controls-locked');
+      }, 3000);
+    };
+
+    this.videoWrap.addEventListener('mousemove', showControls);
+    this.videoWrap.addEventListener('touchstart', showControls, {passive:true});
+    // Show controls initially for 4s
+    this.videoWrap.classList.add('controls-locked');
+    this.controlsTimeout = setTimeout(() => {
+      this.videoWrap.classList.remove('controls-locked');
+    }, 4000);
+
+    // Play / Pause
+    this.ctrlPlay.onclick = () => {
+      if(v.paused) v.play().catch(()=>{});
+      else v.pause();
+    };
+    v.addEventListener('play',  () => { this.ctrlPlay.innerHTML = this.ICON_PAUSE; });
+    v.addEventListener('pause', () => { this.ctrlPlay.innerHTML = this.ICON_PLAY;  });
+
+    // Click video to toggle play/pause
+    v.addEventListener('click', (e) => {
+      e.preventDefault();
+      if(v.paused) v.play().catch(()=>{});
+      else v.pause();
+      showControls();
+    });
+
+    // Mute / Unmute
+    this.ctrlMute.onclick = () => {
+      v.muted = !v.muted;
+      if(!v.muted && v.volume === 0) v.volume = 0.5;
+      this.ctrlVolume.value = v.muted ? 0 : v.volume;
+      this.ctrlMute.innerHTML = v.muted ? this.ICON_MUTE : this.ICON_VOL;
+    };
+
+    // Volume slider
+    this.ctrlVolume.oninput = () => {
+      const val = parseFloat(this.ctrlVolume.value);
+      v.volume = val;
+      v.muted = val === 0;
+      this.ctrlMute.innerHTML = val === 0 ? this.ICON_MUTE : this.ICON_VOL;
+    };
+
+    // Sync volume UI when video changes
+    v.addEventListener('volumechange', () => {
+      this.ctrlVolume.value = v.muted ? 0 : v.volume;
+      this.ctrlMute.innerHTML = (v.muted || v.volume === 0) ? this.ICON_MUTE : this.ICON_VOL;
+    });
+
+    // Fullscreen
+    this.ctrlFullscreen.onclick = () => {
+      const wrap = this.videoWrap;
+      if(document.fullscreenElement){
+        document.exitFullscreen().catch(()=>{});
+      } else {
+        (wrap.requestFullscreen || wrap.webkitRequestFullscreen || wrap.msRequestFullscreen).call(wrap);
+      }
+    };
+
+    // Initial muted state
+    this.ctrlMute.innerHTML = this.ICON_MUTE;
+    this.ctrlVolume.value = 0;
+  },
 
   // ── Auto-switch countdown ───────────────────────────────────────────────────
   scheduleAutoSwitch(){
@@ -614,9 +735,7 @@ const TCTV = window.TCTV = {
       fragLoadingRetryDelay:1500,
       manifestLoadingRetryDelay:1500,
       levelLoadingRetryDelay:1500,
-      // All URLs from proxy.php are same-origin — no CORS headers needed.
-      // proxy.php rewrites every M3U8 segment URL back through itself,
-      // so HLS.js never issues a cross-origin request.
+      // All URLs route through Cloudflare Worker proxy.
     });
     hls.loadSource(streamUrl);
     hls.attachMedia(this.player);
@@ -643,13 +762,11 @@ const TCTV = window.TCTV = {
     this.markActive(idx);
     this.hideError();
     this.cancelAutoSwitch();
+    this.hideWarning();
 
     const srv=this.servers[idx];
     this.showSpinner('Connecting to '+srv.name,srv.group||'');
     this.destroyHls();
-
-    if(srv.is_fallback)this.setWarning('⚠ All live sources failed. Showing test stream.');
-    else this.hideWarning();
 
     if(Hls.isSupported()){
       const onManifest = () => {
@@ -667,9 +784,7 @@ const TCTV = window.TCTV = {
         this.showError(srv.name+' unavailable','Trying next server…',true);
       };
 
-      // All requests route through proxy.php.
-      // proxy.php spoofs Origin/Referer server-side and rewrites every M3U8
-      // segment URL back through itself — HLS.js never sees a cross-origin URL.
+      // All requests route through Cloudflare Worker proxy.
       this.hls = this._makeHls(srv.proxy_url, onFatal);
       this.hls.on(Hls.Events.MANIFEST_PARSED, onManifest);
 
@@ -688,31 +803,28 @@ const TCTV = window.TCTV = {
     }
   },
 
-  // ── Server pill UI ──────────────────────────────────────────────────────────
+  // ── In-player server button UI ─────────────────────────────────────────────
   buildPills(){
-    this.serverScroll.innerHTML='';
+    // Build in-player overlay buttons
+    this.playerServers.innerHTML='';
     this.servers.forEach((srv,i)=>{
-      const pill=document.createElement('button');
-      pill.className='srv-pill'+(i===0?' active':'');
-      pill.innerHTML=`<div class="pill-dot"></div>${srv.name}`;
-      if(srv.group && srv.group!=='Live'){
-        const badge=document.createElement('span');
-        badge.className='srv-group';
-        badge.textContent=srv.group;
-        pill.appendChild(badge);
-      }
-      pill.onclick=()=>this.loadServer(i);
-      this.serverScroll.appendChild(pill);
+      const btn=document.createElement('button');
+      btn.className='psrv-btn'+(i===0?' active':'');
+      btn.dataset.idx=i;
+      btn.innerHTML=`<div class="psrv-dot"></div>${srv.name}`;
+      btn.onclick=()=>this.loadServer(i);
+      this.playerServers.appendChild(btn);
     });
   },
   markActive(idx){
-    document.querySelectorAll('.srv-pill').forEach((el,i)=>{
+    document.querySelectorAll('.psrv-btn').forEach((el,i)=>{
       el.classList.toggle('active',i===idx);
     });
   },
   markFailed(idx){
-    const pills=document.querySelectorAll('.srv-pill');
-    if(pills[idx])pills[idx].classList.add('failed');
+    // Hide failed server buttons from overlay (clean UI)
+    const btns=document.querySelectorAll('.psrv-btn');
+    if(btns[idx]) btns[idx].style.display='none';
   },
 
   // ── Match info card ─────────────────────────────────────────────────────────
@@ -757,11 +869,59 @@ const TCTV = window.TCTV = {
   // ── Retry ───────────────────────────────────────────────────────────────────
   retry(){
     this.failedServers.delete(this.currentIdx);
+    // Re-show the button we may have hidden
+    const btns=document.querySelectorAll('.psrv-btn');
+    if(btns[this.currentIdx]) btns[this.currentIdx].style.display='';
     this.loadServer(this.currentIdx);
+  },
+
+  // ── Background token refresh ───────────────────────────────────────────────
+  // Silently re-fetch stream.php every 55s to get fresh CDN tokens.
+  // Updates proxy_url on existing server objects so the next segment fetch
+  // picks up the new token without interrupting current playback.
+  startAutoRefresh(){
+    if(this.refreshTimer) clearInterval(this.refreshTimer);
+    this.refreshTimer = setInterval(async () => {
+      try{
+        const res = await fetch('stream.php');
+        if(!res.ok) return;
+        const data = await res.json();
+        const freshServers = (data.servers || []);
+        if(freshServers.length === 0) return;
+
+        // Update proxy_url for matching servers by name
+        freshServers.forEach(fresh => {
+          const existing = this.servers.find(s => s.name === fresh.name);
+          if(existing){
+            existing.proxy_url = fresh.proxy_url;
+            existing.raw_url   = fresh.raw_url;
+          }
+        });
+
+        // Add any new servers that weren't in our list
+        freshServers.forEach(fresh => {
+          if(!this.servers.find(s => s.name === fresh.name)){
+            this.servers.push(fresh);
+            // Add button to overlay
+            const btn = document.createElement('button');
+            btn.className = 'psrv-btn';
+            btn.dataset.idx = this.servers.length - 1;
+            btn.innerHTML = `<div class="psrv-dot"></div>${fresh.name}`;
+            btn.onclick = () => this.loadServer(this.servers.length - 1);
+            this.playerServers.appendChild(btn);
+          }
+        });
+
+        console.log('[auto-refresh] Token refresh OK, servers:', freshServers.length);
+      }catch(e){
+        console.warn('[auto-refresh] Failed:', e.message);
+      }
+    }, 55000); // every 55 seconds (cache TTL is 60s)
   },
 
   // ── Init ────────────────────────────────────────────────────────────────────
   async init(){
+    this.initControls();
     this.showSpinner('Fetching stream list…','');
 
     // Hard 8-second timeout — never spin forever waiting for stream.php
@@ -775,21 +935,20 @@ const TCTV = window.TCTV = {
       if(!res.ok) throw new Error('stream.php HTTP ' + res.status);
       const data = await res.json();
 
-      // Live servers come first — always index 0 gets auto-played
-      // DB custom channels are appended after so they never block live streams
-      const liveServers   = (data.servers || []).filter(s => !s.is_fallback);
-      const fallback      = (data.servers || []).filter(s =>  s.is_fallback);
+      // Only show dynamically scraped live servers (no fallback VOD)
+      const liveServers   = (data.servers || []);
       const customServers = this.customChannelsFromPHP || [];
 
-      // Order: live → custom DB → fallback test stream
-      this.servers = [...liveServers, ...customServers, ...fallback];
+      // Order: live scraped → custom DB channels
+      this.servers = [...liveServers, ...customServers];
 
       if(this.servers.length === 0){
         throw new Error('No streams available.');
       }
 
       // Show match info card if FIFA streams are present
-      const hasFifa = liveServers.some(s => (s.name||'').toLowerCase().includes('fifa'));
+      const hasFifa = liveServers.some(s => (s.name||'').toLowerCase().includes('fifa') ||
+                                             (s.name||'').toLowerCase().includes('server'));
       if(hasFifa){
         this.showMatchCard('FIFA World Cup 2026', 'Live • Sports', 'June 11 – July 19 2026');
       }
@@ -797,31 +956,22 @@ const TCTV = window.TCTV = {
       this.buildPills();
       this.loadServer(0);  // always the first LIVE server
 
-      // Show cache age so users know how fresh the server list is
-      if(data.cached && data.cached_age > 0){
-        const mins = Math.round(data.cached_age / 60);
-        this.cacheAge.textContent = mins < 1
-          ? 'updated just now'
-          : `updated ${mins}m ago`;
-      } else {
-        this.cacheAge.textContent = 'live';
-      }
-
       if(data.warning) this.setWarning(data.warning);
+
+      // Start background token refresh
+      this.startAutoRefresh();
 
     } catch(err){
       clearTimeout(fetchTimeout);
       console.error('[stream.php error]', err);
 
       // Only use DB channels as emergency fallback — and only if we have them
-      // Do NOT silently spin — show an error immediately
       if(this.customChannelsFromPHP && this.customChannelsFromPHP.length > 0){
         this.servers = [...this.customChannelsFromPHP];
         this.buildPills();
         this.loadServer(0);
         this.setWarning('⚠ Live source unavailable. Showing saved channels.');
       } else {
-        // Nothing to play — show a clear error message right away
         const reason = err.name === 'AbortError'
           ? 'Stream list timed out. Check back shortly.'
           : 'Could not load streams: ' + err.message;
@@ -836,8 +986,10 @@ document.addEventListener('visibilitychange',()=>{
   if(document.hidden){
     TCTV.destroyHls();
     TCTV.cancelAutoSwitch();
+    if(TCTV.refreshTimer){ clearInterval(TCTV.refreshTimer); TCTV.refreshTimer=null; }
   }else if(TCTV.servers.length>0){
     TCTV.loadServer(TCTV.currentIdx);
+    TCTV.startAutoRefresh();
   }
 });
 

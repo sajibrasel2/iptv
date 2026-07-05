@@ -43,18 +43,8 @@ require_once __DIR__ . '/config.php';
 // ── Configuration ─────────────────────────────────────────────────────────────
 const SOURCE_URL = 'https://fifalive.click/';
 const CACHE_FILE = __DIR__ . '/links_cache.json';
-const CACHE_TTL  = 300;   // seconds — re-scrape after 5 minutes
+const CACHE_TTL  = 60;    // seconds — re-scrape after 1 minute (tokens expire fast)
 const WORKER_BASE_URL = 'https://purple-queen-88f6.sajibrasel92.workers.dev';
-
-// ── Fallback stream ───────────────────────────────────────────────────────────
-$FALLBACK = [
-    'name'        => 'Test Stream',
-    'group'       => 'Fallback',
-    'logo'        => '',
-    'raw_url'     => 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
-    'proxy_url'   => WORKER_BASE_URL . '?url=' . rawurlencode('https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8'),
-    'is_fallback' => true,
-];
 
 // ── Encryption helpers ────────────────────────────────────────────────────────
 
@@ -352,18 +342,17 @@ foreach ($scrapedEntries as $i => $entry) {
     $seenUrls[] = $clean;
 }
 
-// 4c. Always append fallback last
-$servers[] = $FALLBACK;
+// 4c. Fallback removed — frontend shows a proper error when no servers available
 
 // ── Step 5: response ──────────────────────────────────────────────────────────
-$liveCount  = max(0, count($servers) - 1);
+$liveCount  = count($servers);
 $fromCache  = ($cached !== null);
 $cachedAge  = ($fromCache && file_exists(CACHE_FILE))
             ? (time() - filemtime(CACHE_FILE)) : 0;
 
 echo json_encode([
-    'ok'         => true,
-    'source'     => $liveCount > 0 ? 'db+fifalive' : 'fallback',
+    'ok'         => $liveCount > 0,
+    'source'     => $liveCount > 0 ? 'db+fifalive' : 'none',
     'count'      => $liveCount,
     'cached'     => $fromCache,
     'cached_age' => $cachedAge,
