@@ -488,7 +488,7 @@ body{
       <!-- Video card -->
       <div id="video-card">
         <div id="video-wrap">
-          <video id="player" playsinline autoplay muted></video>
+          <video id="player" playsinline muted></video>
 
           <!-- LIVE badge -->
           <div id="player-live-badge"><div class="plb-dot"></div>LIVE</div>
@@ -1113,7 +1113,13 @@ const TCTV = window.TCTV = {
       }
 
       this.buildPills();
-      this.loadServer(0);  // always the first LIVE server
+      
+      // Safety check: only load if we have valid servers
+      if(this.servers.length > 0 && this.servers[0] && this.servers[0].proxy_url){
+        this.loadServer(0);  // always the first LIVE server
+      } else {
+        throw new Error('No valid servers available.');
+      }
 
       if(data.warning) this.setWarning(data.warning);
 
@@ -1128,7 +1134,11 @@ const TCTV = window.TCTV = {
       if(this.customChannelsFromPHP && this.customChannelsFromPHP.length > 0){
         this.servers = [...this.customChannelsFromPHP];
         this.buildPills();
-        this.loadServer(0);
+        
+        // Safety check before loading
+        if(this.servers.length > 0 && this.servers[0] && this.servers[0].proxy_url){
+          this.loadServer(0);
+        }
         this.setWarning('⚠ Live source unavailable. Showing saved channels.');
       } else {
         const reason = err.name === 'AbortError'
