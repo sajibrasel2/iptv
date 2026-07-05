@@ -601,7 +601,7 @@ const TCTV = window.TCTV = {
   // onFatal() is called when all recovery attempts are exhausted.
   _makeHls(streamUrl, onFatal){
     let netRetries = 0, mediaRetries = 0;
-    const MAX_NET   = 1;   // one retry on network error before switching servers
+    const MAX_NET   = 0;   // no retries — switch servers immediately on network error
     const MAX_MEDIA = 2;
 
     const hls = new Hls({

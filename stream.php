@@ -44,6 +44,7 @@ require_once __DIR__ . '/config.php';
 const SOURCE_URL = 'https://fifalive.click/';
 const CACHE_FILE = __DIR__ . '/links_cache.json';
 const CACHE_TTL  = 300;   // seconds — re-scrape after 5 minutes
+const WORKER_BASE_URL = 'https://purple-queen-88f6.sajibrasel92.workers.dev';
 
 // ── Fallback stream ───────────────────────────────────────────────────────────
 $FALLBACK = [
@@ -51,7 +52,7 @@ $FALLBACK = [
     'group'       => 'Fallback',
     'logo'        => '',
     'raw_url'     => 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
-    'proxy_url'   => 'proxy.php?url=' . rawurlencode('https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8') . '&raw=true',
+    'proxy_url'   => WORKER_BASE_URL . '?url=' . rawurlencode('https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8'),
     'is_fallback' => true,
 ];
 
@@ -86,97 +87,8 @@ function sanitiseUrl(string $raw): string {
 }
 
 function makeProxyUrl(string $rawUrl): string {
-    return 'proxy.php?url=' . rawurlencode($rawUrl) . '&raw=true';
+    return WORKER_BASE_URL . '?url=' . rawurlencode($rawUrl);
 }
-
-/**
- * For Cloudflare Worker URLs: fetch the M3U8 server-side, cache it locally,
- * and return a URL pointing to our cached version.
- * This bypasses the Worker entirely for the browser — it never hits the Worker IP block.
- * TikTok segment URLs inside the M3U8 are kept as-is (browser fetches them directly,
- * proxy.php sends 302 redirect for tiktokcdn.com URLs).
- */
-function fetchAndCacheWorkerM3u8(string $workerUrl): ?string {
-    $cacheDir  = __DIR__ . '/m3u8_cache';
-    $cacheKey  = 'worker_' . md5($workerUrl) . '.m3u8';
-    $cachePath = $cacheDir . '/' . $cacheKey;
-    $cacheUrl  = 'm3u8_cache/' . $cacheKey;
-    $cacheTtl  = 8; // seconds — M3U8 updates every ~3s for live streams
-
-    // Return cached version if fresh
-    if (file_exists($cachePath) && (time() - filemtime($cachePath)) < $cacheTtl) {
-        return $cacheUrl;
-    }
-
-    // Fetch fresh M3U8 from Worker
-    $ch = curl_init($workerUrl);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_MAXREDIRS      => 3,
-        CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4,
-        CURLOPT_CONNECTTIMEOUT => 8,
-        CURLOPT_TIMEOUT        => 10,
-        CURLOPT_USERAGENT      => 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
-        CURLOPT_REFERER        => 'https://fifalive.click/',
-        CURLOPT_HTTPHEADER     => [
-            'Origin: https://fifalive.click',
-            'Referer: https://fifalive.click/',
-            'Accept: application/vnd.apple.mpegurl, */*',
-            'Cache-Control: no-cache',
-        ],
-    ]);
-    $body = curl_exec($ch);
-    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($code !== 200 || !$body || stripos(ltrim($body), '#EXTM3U') !== 0) {
-        return null; // Worker not reachable
-    }
-
-    // Create cache directory if needed
-    if (!is_dir($cacheDir)) {
-        mkdir($cacheDir, 0755, true);
-    }
-
-    // Write M3U8 with segment URLs proxied through proxy.php
-    // TikTok URLs → proxy.php will 302-redirect them to browser
-    // Other segment URLs → proxy.php will forward them server-side
-    $rewritten = rewriteCachedM3u8($body, $workerUrl);
-    file_put_contents($cachePath, $rewritten, LOCK_EX);
-
-    return $cacheUrl;
-}
-
-/**
- * Rewrite M3U8 segment URLs to go through proxy.php.
- * proxy.php will 302-redirect tiktokcdn.com URLs to the browser directly.
- */
-function rewriteCachedM3u8(string $body, string $baseUrl): string {
-    $lines = preg_split('~\r?\n~', $body);
-    foreach ($lines as $i => $line) {
-        $t = trim($line);
-        if ($t === '' || $t[0] === '#') continue;
-        // Absolute or relative URL — make absolute then proxy it
-        if (preg_match('~^https?://~i', $t)) {
-            $lines[$i] = '../proxy.php?url=' . rawurlencode($t) . '&raw=true';
-        } else {
-            $p      = parse_url($baseUrl);
-            $scheme = $p['scheme'] ?? 'https';
-            $host   = $p['host']   ?? '';
-            $path   = $p['path']   ?? '/';
-            $dir    = substr($path, -1) === '/' ? $path : rtrim(dirname($path), '/') . '/';
-            $abs    = $scheme . '://' . $host . $dir . ltrim($t, './');
-            $lines[$i] = '../proxy.php?url=' . rawurlencode($abs) . '&raw=true';
-        }
-    }
-    return implode("\n", $lines);
-}
-
-/*
- * DUPLICATE REMOVED — already defined above
- */
 
 function isM3u8(string $body, string $ctype): bool {
     if (stripos($ctype, 'mpegurl')   !== false) return true;
@@ -304,7 +216,7 @@ function getDb(string $servername, string $username, string $password,
 
 /**
  * Load active rows from stream_sources, decrypt URLs, return as server objects.
- * Rows are ordered by priority ASC so the best-known source comes first.
+ * All URLs now route through Cloudflare Worker.
  */
 function loadDbSources(PDO $pdo, string $encKey): array {
     $rows = $pdo->query(
@@ -318,21 +230,12 @@ function loadDbSources(PDO $pdo, string $encKey): array {
         $url = decryptUrl($row['raw_url_enc'], $encKey);
         if ($url === null || !filter_var($url, FILTER_VALIDATE_URL)) continue;
 
-        // For Worker URLs: pre-fetch M3U8 server-side and serve cached version
-        $proxyUrl = makeProxyUrl($url);
-        if (str_contains($url, 'workers.dev')) {
-            $cached = fetchAndCacheWorkerM3u8($url);
-            if ($cached) {
-                $proxyUrl = $cached;
-            }
-        }
-
         $servers[] = [
             'name'      => $row['name'],
             'group'     => $row['grp'],
             'logo'      => '',
             'raw_url'   => $url,
-            'proxy_url' => $proxyUrl,
+            'proxy_url' => makeProxyUrl($url),
             'db_id'     => (int) $row['id'],
         ];
     }
@@ -439,22 +342,12 @@ foreach ($scrapedEntries as $i => $entry) {
     $clean = rtrim($entry['url'], '/');
     if (in_array($clean, $seenUrls, true)) continue;  // already in list
 
-    // For Worker URLs: try to pre-fetch M3U8 and serve cached version
-    // This bypasses the Worker IP block entirely for the browser
-    $proxyUrl = makeProxyUrl($entry['url']);
-    if (str_contains($entry['url'], 'workers.dev')) {
-        $cached = fetchAndCacheWorkerM3u8($entry['url']);
-        if ($cached) {
-            $proxyUrl = $cached;
-        }
-    }
-
     $servers[] = [
         'name'      => $entry['name'],
         'group'     => $entry['group'],
         'logo'      => '',
         'raw_url'   => $entry['url'],
-        'proxy_url' => $proxyUrl,
+        'proxy_url' => makeProxyUrl($entry['url']),
     ];
     $seenUrls[] = $clean;
 }
