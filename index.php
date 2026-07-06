@@ -542,6 +542,28 @@ body{
   display:none;
 }
 #src-badge.visible{display:block}
+
+/* ── Debug console (visible when console logs exist) ───────────── */
+#debug-console{
+  position:fixed;bottom:80px;left:0;right:0;
+  max-width:480px;margin:0 auto;
+  background:rgba(0,0,0,.95);
+  border:1px solid rgba(255,0,0,.5);
+  color:#0f0;font-family:monospace;font-size:10px;
+  max-height:200px;overflow-y:auto;
+  padding:8px;z-index:9998;
+  display:none;
+}
+#debug-console.visible{display:block}
+#debug-console .log-entry{
+  border-bottom:1px solid rgba(255,255,255,.1);
+  padding:4px 0;
+}
+#debug-console .log-error{color:#f00}
+#debug-console .log-warn{color:#fa0}
+#debug-console .log-info{color:#0ff}
+#debug-console .log-success{color:#0f0}
+
 </style>
 </head>
 <body>
@@ -789,9 +811,76 @@ body{
   </nav>
 </div><!-- /app -->
 
+<!-- Debug console (shows live console logs) -->
+<div id="debug-console"></div>
+
 <script>
 (function(){
 'use strict';
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  DEBUG LOGGER — Captures console output and displays on-page for debugging
+// ══════════════════════════════════════════════════════════════════════════════
+const DebugLogger = {
+  console: null,
+  logs: [],
+  
+  init() {
+    this.console = document.getElementById('debug-console');
+    if (!this.console) return;
+    
+    // Override console methods to capture logs
+    const originalLog = console.log;
+    const originalError = console.error;
+    const originalWarn = console.warn;
+    
+    console.log = (...args) => {
+      originalLog.apply(console, args);
+      this.addLog('info', args);
+    };
+    
+    console.error = (...args) => {
+      originalError.apply(console, args);
+      this.addLog('error', args);
+    };
+    
+    console.warn = (...args) => {
+      originalWarn.apply(console, args);
+      this.addLog('warn', args);
+    };
+  },
+  
+  addLog(type, args) {
+    if (!this.console) return;
+    
+    const text = args.map(arg => {
+      if (typeof arg === 'object') {
+        try {
+          return JSON.stringify(arg, null, 2);
+        } catch(e) {
+          return String(arg);
+        }
+      }
+      return String(arg);
+    }).join(' ');
+    
+    const entry = document.createElement('div');
+    entry.className = `log-entry log-${type}`;
+    entry.textContent = `[${new Date().toISOString().substr(11,12)}] ${text}`;
+    
+    this.console.appendChild(entry);
+    this.console.scrollTop = this.console.scrollHeight;
+    this.console.classList.add('visible');
+    
+    // Keep only last 50 logs
+    while (this.console.children.length > 50) {
+      this.console.removeChild(this.console.firstChild);
+    }
+  }
+};
+
+// Initialize debug logger
+DebugLogger.init();
 
 // ══════════════════════════════════════════════════════════════════════════════
 //  TCTV — Tech & Click TV Player Core
@@ -983,6 +1072,8 @@ const TCTV = window.TCTV = {
     const MAX_NET   = 0;   // no retries — switch servers immediately on network error
     const MAX_MEDIA = 2;
 
+    console.log('[HLS] Loading stream:', streamUrl);
+
     const hls = new Hls({
       enableWorker:true,
       lowLatencyMode:true,
@@ -993,21 +1084,54 @@ const TCTV = window.TCTV = {
       fragLoadingRetryDelay:1500,
       manifestLoadingRetryDelay:1500,
       levelLoadingRetryDelay:1500,
+      xhrSetup: function(xhr, url) {
+        // Add detailed logging for network requests
+        console.log('[HLS] XHR request:', url);
+      },
       // All URLs route through Cloudflare Worker proxy.
     });
+    
+    hls.on(Hls.Events.MANIFEST_LOADING, () => {
+      console.log('[HLS] Manifest loading started');
+    });
+    
+    hls.on(Hls.Events.MANIFEST_LOADED, (event, data) => {
+      console.log('[HLS] Manifest loaded successfully:', data);
+    });
+    
+    hls.on(Hls.Events.FRAG_LOADING, (event, data) => {
+      console.log('[HLS] Fragment loading:', data.frag.url);
+    });
+    
+    hls.on(Hls.Events.FRAG_LOADED, (event, data) => {
+      console.log('[HLS] Fragment loaded:', data.frag.url);
+    });
+
     hls.loadSource(streamUrl);
     hls.attachMedia(this.player);
 
     hls.on(Hls.Events.ERROR,(ev,data)=>{
+      console.error('[HLS ERROR]', {
+        type: data.type,
+        details: data.details,
+        fatal: data.fatal,
+        url: streamUrl,
+        networkDetails: data.response,
+        error: data.error
+      });
+      
       if(!data.fatal) return;
-      console.error('[HLS fatal]',data.type,data.details,streamUrl);
+      
       if(data.type===Hls.ErrorTypes.NETWORK_ERROR){
+        console.error('[HLS NETWORK ERROR] Status:', data.response?.code, 'URL:', data.response?.url);
         if(netRetries < MAX_NET){ netRetries++; hls.startLoad(); }
         else onFatal(data);
       } else if(data.type===Hls.ErrorTypes.MEDIA_ERROR){
+        console.error('[HLS MEDIA ERROR] Details:', data.details);
         if(mediaRetries < MAX_MEDIA){ mediaRetries++; hls.recoverMediaError(); }
         else onFatal(data);
       } else {
+        console.error('[HLS OTHER ERROR] Type:', data.type);
         onFatal(data);
       }
     });
@@ -1032,7 +1156,7 @@ const TCTV = window.TCTV = {
     }
   },
 
-  loadServer(idx){
+  async loadServer(idx){
     if(!this.servers[idx])return;
     this.currentIdx=idx;
     this.markActive(idx);
@@ -1041,21 +1165,56 @@ const TCTV = window.TCTV = {
     this.hideWarning();
 
     const srv=this.servers[idx];
+    console.log('[loadServer] Starting load for:', {
+      index: idx,
+      name: srv.name,
+      proxy_url: srv.proxy_url,
+      raw_url: srv.raw_url
+    });
+
     this.showSpinner('Connecting to '+srv.name,srv.group||'');
     this.destroyHls();
 
+    // Pre-flight check: test if the proxy URL is reachable
+    try {
+      console.log('[loadServer] Pre-flight check: fetching proxy URL');
+      const testResponse = await fetch(srv.proxy_url, {
+        method: 'HEAD',
+        cache: 'no-cache'
+      });
+      console.log('[loadServer] Pre-flight response:', {
+        status: testResponse.status,
+        statusText: testResponse.statusText,
+        headers: Object.fromEntries(testResponse.headers.entries())
+      });
+      
+      if (!testResponse.ok) {
+        console.error('[loadServer] Pre-flight FAILED:', testResponse.status);
+        throw new Error(`HTTP ${testResponse.status}: ${testResponse.statusText}`);
+      }
+    } catch (prefErr) {
+      console.error('[loadServer] Pre-flight check failed:', prefErr);
+      this.destroyHls();
+      this.failedServers.add(idx);
+      this.markFailed(idx);
+      this.showError(srv.name+' unreachable', `Connection failed: ${prefErr.message}`, true);
+      return;
+    }
+
     if(Hls.isSupported()){
       const onManifest = () => {
+        console.log('[loadServer] Manifest parsed successfully!');
         this.hideSpinner();
         this.attemptPlay();
         this.setBadge(srv.name);
       };
 
-      const onFatal = () => {
+      const onFatal = (data) => {
+        console.error('[loadServer] Fatal error callback triggered:', data);
         this.destroyHls();
         this.failedServers.add(idx);
         this.markFailed(idx);
-        this.showError(srv.name+' unavailable','Trying next server…',true);
+        this.showError(srv.name+' unavailable',`Error: ${data.details || 'Unknown error'}`,true);
       };
 
       // All requests route through Cloudflare Worker proxy.
@@ -1064,17 +1223,21 @@ const TCTV = window.TCTV = {
 
     }else if(this.player.canPlayType('application/vnd.apple.mpegurl')){
       // Native HLS (iOS Safari)
+      console.log('[loadServer] Using native HLS playback');
       this.player.src = srv.proxy_url;
       this.player.addEventListener('loadedmetadata',()=>{
+        console.log('[loadServer] Native HLS metadata loaded');
         this.hideSpinner();
         this.attemptPlay();
         this.setBadge(srv.name);
       },{once:true});
-      this.player.addEventListener('error',()=>{
+      this.player.addEventListener('error',(e)=>{
+        console.error('[loadServer] Native HLS error:', e);
         this.failedServers.add(idx); this.markFailed(idx);
-        this.showError(srv.name+' failed','Trying next server…',true);
+        this.showError(srv.name+' failed','Native playback error',true);
       },{once:true});
     }else{
+      console.error('[loadServer] HLS not supported in this browser');
       this.showError('Your browser does not support HLS','Try Chrome, Safari, or Edge');
     }
   },
@@ -1291,6 +1454,8 @@ const TCTV = window.TCTV = {
 
   // ── Init ────────────────────────────────────────────────────────────────────
   async init(){
+    console.log('[TCTV] Initializing player...');
+    
     this.initControls();
     this.startViewerCounter();  // Start viewer count simulation
     this.initWelcomeListeners(); // Setup welcome popup event listeners
@@ -1311,23 +1476,45 @@ const TCTV = window.TCTV = {
 
     // Hard 8-second timeout — never spin forever waiting for stream.php
     const controller = new AbortController();
-    const fetchTimeout = setTimeout(() => controller.abort(), 8000);
+    const fetchTimeout = setTimeout(() => {
+      console.error('[TCTV] stream.php fetch timeout after 8 seconds');
+      controller.abort();
+    }, 8000);
 
     try{
+      console.log('[TCTV] Fetching stream.php...');
       const res = await fetch('stream.php', { signal: controller.signal });
       clearTimeout(fetchTimeout);
 
-      if(!res.ok) throw new Error('stream.php HTTP ' + res.status);
+      console.log('[TCTV] stream.php response:', {
+        ok: res.ok,
+        status: res.status,
+        statusText: res.statusText,
+        contentType: res.headers.get('content-type')
+      });
+
+      if(!res.ok) {
+        console.error('[TCTV] stream.php returned error status:', res.status);
+        throw new Error('stream.php HTTP ' + res.status);
+      }
+      
       const data = await res.json();
+      console.log('[TCTV] stream.php data:', data);
 
       // Only show dynamically scraped live servers (no fallback VOD)
       const liveServers   = (data.servers || []);
       const customServers = this.customChannelsFromPHP || [];
 
+      console.log('[TCTV] Parsed servers:', {
+        liveCount: liveServers.length,
+        customCount: customServers.length
+      });
+
       // Order: live scraped → custom DB channels
       this.servers = [...liveServers, ...customServers];
 
       if(this.servers.length === 0){
+        console.error('[TCTV] No servers available in response');
         throw new Error('No streams available.');
       }
 
@@ -1342,34 +1529,41 @@ const TCTV = window.TCTV = {
       
       // Safety check: only load if we have valid servers
       if(this.servers.length > 0 && this.servers[0] && this.servers[0].proxy_url){
-        this.loadServer(0);  // always the first LIVE server
+        console.log('[TCTV] Loading first server:', this.servers[0]);
+        await this.loadServer(0);  // always the first LIVE server
       } else {
+        console.error('[TCTV] No valid servers available');
         throw new Error('No valid servers available.');
       }
 
-      if(data.warning) this.setWarning(data.warning);
+      if(data.warning) {
+        console.warn('[TCTV] Warning from stream.php:', data.warning);
+        this.setWarning(data.warning);
+      }
 
       // Start background token refresh
       this.startAutoRefresh();
 
     } catch(err){
       clearTimeout(fetchTimeout);
-      console.error('[stream.php error]', err);
+      console.error('[TCTV] Init error:', err);
 
       // Only use DB channels as emergency fallback — and only if we have them
       if(this.customChannelsFromPHP && this.customChannelsFromPHP.length > 0){
+        console.log('[TCTV] Using fallback DB channels:', this.customChannelsFromPHP.length);
         this.servers = [...this.customChannelsFromPHP];
         this.buildPills();
         
         // Safety check before loading
         if(this.servers.length > 0 && this.servers[0] && this.servers[0].proxy_url){
-          this.loadServer(0);
+          await this.loadServer(0);
         }
         this.setWarning('⚠ Live source unavailable. Showing saved channels.');
       } else {
         const reason = err.name === 'AbortError'
           ? 'Stream list timed out. Check back shortly.'
           : 'Could not load streams: ' + err.message;
+        console.error('[TCTV] Fatal error:', reason);
         this.showError('Stream source offline', reason);
       }
     }
