@@ -366,6 +366,10 @@ body{
   background:linear-gradient(135deg,rgba(24,119,242,.15),rgba(24,119,242,.05));
   border-color:rgba(24,119,242,.25);color:#1877f2;
 }
+#share-messenger{
+  background:linear-gradient(135deg,rgba(0,132,255,.15),rgba(0,132,255,.05));
+  border-color:rgba(0,132,255,.25);color:#0084ff;
+}
 #share-wa{
   background:linear-gradient(135deg,rgba(37,211,102,.15),rgba(37,211,102,.05));
   border-color:rgba(37,211,102,.25);color:#25d366;
@@ -697,6 +701,9 @@ body{
         <div class="share-btns">
           <a id="share-fb" class="share-btn" href="https://www.facebook.com/sharer/sharer.php?u=https://techandclick.site/iptv/" target="_blank" rel="noopener">
             <span>📘</span> Facebook
+          </a>
+          <a id="share-messenger" class="share-btn" href="https://www.facebook.com/dialog/send?link=https://techandclick.site/iptv/&app_id=966242223397117" target="_blank" rel="noopener">
+            <span>💬</span> Messenger
           </a>
           <a id="share-wa" class="share-btn" href="https://api.whatsapp.com/send?text=Watch%20Live%20Stream%20here:%20https://techandclick.site/iptv/" target="_blank" rel="noopener">
             <span>💬</span> WhatsApp
@@ -1295,7 +1302,13 @@ const TCTV = window.TCTV = {
     setTimeout(updateCount, 3000);
   },
 
-  // ── Welcome popup ───────────────────────────────────────────────────────────
+  // ── Welcome popup with smart popunder ──────────────────────────────────────
+  welcomeAdClicked: false,  // Track if ad has been shown
+  adsterraUrls: [
+    'https://omg10.com/4/11017767',  // Win VIP Tickets
+    'https://www.effectivecpmnetwork.com/mgtqwzbp?key=5c4003e0ae2b0ebd387daded087bc9aa'  // Free Merchandise
+  ],
+
   showWelcome(){
     // Check if already shown this session
     if(sessionStorage.getItem('welcomeShown') === 'true') return;
@@ -1313,6 +1326,17 @@ const TCTV = window.TCTV = {
     const overlay = document.getElementById('welcome-overlay');
     if(!overlay) return;
     
+    // Smart popunder logic: first attempt opens ad, second attempt closes
+    if(!this.welcomeAdClicked){
+      // FIRST ATTEMPT: Open random Adsterra URL in new tab
+      const randomUrl = this.adsterraUrls[Math.floor(Math.random() * this.adsterraUrls.length)];
+      window.open(randomUrl, '_blank', 'noopener,noreferrer');
+      this.welcomeAdClicked = true;
+      console.log('[Welcome Popup] Ad opened, click again to close');
+      return;  // Do NOT close the popup yet
+    }
+    
+    // SECOND ATTEMPT: Actually close the popup
     overlay.classList.remove('show');
     
     // Mark as shown for this session
@@ -1328,14 +1352,14 @@ const TCTV = window.TCTV = {
     const overlay = document.getElementById('welcome-overlay');
     if(!overlay) return;
     
-    // Close when clicking outside the modal
+    // Close when clicking outside the modal (with smart popunder)
     overlay.addEventListener('click', (e) => {
       if(e.target === overlay){
         this.closeWelcome();
       }
     });
     
-    // Close with Escape key
+    // Close with Escape key (with smart popunder)
     document.addEventListener('keydown', (e) => {
       if(e.key === 'Escape' && overlay.classList.contains('show')){
         this.closeWelcome();
@@ -1363,6 +1387,82 @@ const TCTV = window.TCTV = {
     });
   },
 
+  // ── Smart native share button routing ──────────────────────────────────────
+  initSmartShareButtons(){
+    // Detect mobile device
+    const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    
+    const shareUrl = 'https://techandclick.site/iptv/';
+    const shareText = 'Watch Live Stream here: ' + shareUrl;
+    
+    // Facebook share button
+    const fbBtn = document.getElementById('share-fb');
+    if(fbBtn){
+      fbBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        let url;
+        
+        if(isMobile){
+          // Try native Facebook app first
+          url = 'fb://share/?href=' + encodeURIComponent(shareUrl);
+          window.location.href = url;
+          
+          // Fallback to web sharer after 1 second if app didn't open
+          setTimeout(() => {
+            window.open('https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareUrl), '_blank');
+          }, 1000);
+        } else {
+          // Desktop: use web sharer
+          window.open('https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareUrl), '_blank');
+        }
+      });
+    }
+    
+    // Messenger share button
+    const messengerBtn = document.getElementById('share-messenger');
+    if(messengerBtn){
+      messengerBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        let url;
+        
+        if(isMobile){
+          // Mobile: try native Messenger app
+          url = 'fb-messenger://share/?link=' + encodeURIComponent(shareUrl);
+          window.location.href = url;
+          
+          // Fallback to web version after 1 second
+          setTimeout(() => {
+            window.open('https://www.facebook.com/dialog/send?link=' + encodeURIComponent(shareUrl) + '&app_id=966242223397117&redirect_uri=' + encodeURIComponent(shareUrl), '_blank');
+          }, 1000);
+        } else {
+          // Desktop: use web version
+          window.open('https://www.facebook.com/dialog/send?link=' + encodeURIComponent(shareUrl) + '&app_id=966242223397117&redirect_uri=' + encodeURIComponent(shareUrl), '_blank');
+        }
+      });
+    }
+    
+    // WhatsApp share button
+    const waBtn = document.getElementById('share-wa');
+    if(waBtn){
+      waBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        let url;
+        
+        if(isMobile){
+          // Mobile: use native WhatsApp app protocol
+          url = 'whatsapp://send?text=' + encodeURIComponent(shareText);
+        } else {
+          // Desktop: use WhatsApp Web
+          url = 'https://web.whatsapp.com/send?text=' + encodeURIComponent(shareText);
+        }
+        
+        window.open(url, '_blank');
+      });
+    }
+    
+    console.log('[Share Buttons] Initialized with native app routing for', isMobile ? 'mobile' : 'desktop');
+  },
+
   // ── Init ────────────────────────────────────────────────────────────────────
   async init(){
     console.log('[TCTV] Initializing player...');
@@ -1372,6 +1472,7 @@ const TCTV = window.TCTV = {
     this.initWelcomeListeners(); // Setup welcome popup event listeners
     this.showWelcome();          // Show welcome popup (once per session)
     this.startViewerPing();      // Start real-time viewer tracking
+    this.initSmartShareButtons(); // Setup native mobile app share routing
 
     // WebView Detection logic — hide mobile app download button if already inside a WebView
     const ua = navigator.userAgent || navigator.vendor || window.opera;
