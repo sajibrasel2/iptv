@@ -16,18 +16,29 @@
  *
  * 3. Fallback test stream (always appended last)
  *
+ * PROXY STRATEGY (Updated 2026-07-06)
+ * ─────────────────────────────────────────────────────────────────────────────
+ * - URLs ending in `.workers.dev` are served DIRECTLY (no proxy layer)
+ *   → Cloudflare Workers have CORS enabled by design
+ *   → Browser fetches them directly, bypassing our server entirely
+ *   → Prevents HTTP 403 errors from Worker authentication checks
+ *
+ * - All other URLs route through Cloudflare Worker proxy:
+ *   → https://purple-queen-88f6.sajibrasel92.workers.dev?url=...
+ *   → Worker adds proper headers and bypasses IP restrictions
+ *
  * ENCRYPTION
  * ─────────────────────────────────────────────────────────────────────────────
  * raw_url_enc format:  base64(iv) : base64(ciphertext)
  * Algorithm:           AES-256-CBC
  * Key source:          $DB_ENCRYPT_KEY in config.php / .env.php
  *
- * AUDIT FINDINGS (2026-07-02, cPanel IP 148.251.35.206)
+ * AUDIT FINDINGS (2026-07-06, Debug Console Logs)
  * ─────────────────────────────────────────────────────────────────────────────
- * fx.cinecdn.workers.dev        → HTTP 200 ✓  active   priority 1
- * live3.nextgoal.workers.dev    → HTTP 429    disabled priority 2
- * live.smtahmidx.workers.dev    → HTTP 403    disabled priority 3
- * prod-cdn01-live.toffeelive.com→ DNS fail    disabled priority 4
+ * fx.cinecdn.workers.dev        → Was HTTP 403 via proxy.php, now DIRECT ✓
+ * live3.nextgoal.workers.dev    → Was HTTP 403 via proxy.php, now DIRECT ✓
+ * live.smtahmidx.workers.dev    → Was HTTP 403 via proxy.php, now DIRECT ✓
+ * prod-cdn01-live.toffeelive.com→ HTTP 502 via proxy (IP blocked by CDN)
  */
 
 set_time_limit(45);
@@ -77,6 +88,13 @@ function sanitiseUrl(string $raw): string {
 }
 
 function makeProxyUrl(string $rawUrl): string {
+    // If the URL is already a Cloudflare Worker, use it directly (no proxy needed)
+    // Workers have CORS enabled and don't need our proxy layer
+    if (stripos($rawUrl, '.workers.dev') !== false) {
+        return $rawUrl;
+    }
+    
+    // For all other URLs, route through Cloudflare Worker proxy
     return WORKER_BASE_URL . '?url=' . rawurlencode($rawUrl);
 }
 

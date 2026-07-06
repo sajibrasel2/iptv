@@ -197,8 +197,11 @@ if (!filter_var($clientIp, FILTER_VALIDATE_IP,
     $clientIp = '';
 }
 
+// Enhanced headers with realistic browser fingerprint to bypass hotlink protection
 $headers = [
-    // Exact Accept string sent by iOS Safari when loading HLS
+    // Modern Chrome/Safari User-Agent (NOT identifying as cURL or server)
+    'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    // Exact Accept string sent by browsers when loading HLS
     'Accept: application/vnd.apple.mpegurl, application/x-mpegurl, video/MP2T, */*;q=0.9',
     'Accept-Language: en-US,en;q=0.9',
     'Accept-Encoding: gzip, deflate, br',
@@ -208,6 +211,8 @@ $headers = [
     'Cache-Control: no-cache',
     'Pragma: no-cache',
     'Connection: keep-alive',
+    // Add upgrade-insecure-requests to look more like a browser
+    'Upgrade-Insecure-Requests: 1',
     // NOTE: Sec-Fetch-* headers are intentionally omitted.
     // Cloudflare Workers detect them as datacenter bot traffic when sent
     // from a server-side cURL request (browsers auto-generate these).
@@ -220,24 +225,23 @@ if ($clientIp !== '') {
 }
 
 // ── cURL fetch ────────────────────────────────────────────────────────────────
-// Simple FOLLOWLOCATION — proxytest.php confirmed cinecdn returns direct 200,
-// no redirect chain. Manual redirect loop was unnecessary and introduced bugs.
+// Enhanced cURL configuration with better error handling and realistic browser behavior
 $ch = curl_init($targetUrl);
 curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_FOLLOWLOCATION => true,
     CURLOPT_MAXREDIRS      => 5,
-    CURLOPT_USERAGENT      => 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) '
-                            . 'AppleWebKit/605.1.15 (KHTML, like Gecko) '
-                            . 'Version/17.5 Mobile/15E148 Safari/604.1',
+    CURLOPT_AUTOREFERER    => true,  // Automatically set Referer on redirects
+    CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     CURLOPT_REFERER        => $referer,
-    CURLOPT_SSL_VERIFYPEER => false,
+    CURLOPT_SSL_VERIFYPEER => false,  // Bypass SSL cert validation (some CDNs have issues)
     CURLOPT_SSL_VERIFYHOST => 0,
     CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4,
     CURLOPT_CONNECTTIMEOUT => 15,
     CURLOPT_TIMEOUT        => 45,
-    CURLOPT_ENCODING       => '',
+    CURLOPT_ENCODING       => '',  // Accept all encodings (gzip, deflate, br)
     CURLOPT_HTTPHEADER     => $headers,
+    CURLOPT_FAILONERROR    => false,  // Don't fail silently — we want to see error responses
 ]);
 
 $content  = curl_exec($ch);
