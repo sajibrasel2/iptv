@@ -542,28 +542,6 @@ body{
   display:none;
 }
 #src-badge.visible{display:block}
-
-/* ── Debug console (visible when console logs exist) ───────────── */
-#debug-console{
-  position:fixed;bottom:80px;left:0;right:0;
-  max-width:480px;margin:0 auto;
-  background:rgba(0,0,0,.95);
-  border:1px solid rgba(255,0,0,.5);
-  color:#0f0;font-family:monospace;font-size:10px;
-  max-height:200px;overflow-y:auto;
-  padding:8px;z-index:9998;
-  display:none;
-}
-#debug-console.visible{display:block}
-#debug-console .log-entry{
-  border-bottom:1px solid rgba(255,255,255,.1);
-  padding:4px 0;
-}
-#debug-console .log-error{color:#f00}
-#debug-console .log-warn{color:#fa0}
-#debug-console .log-info{color:#0ff}
-#debug-console .log-success{color:#0f0}
-
 </style>
 </head>
 <body>
@@ -811,76 +789,9 @@ body{
   </nav>
 </div><!-- /app -->
 
-<!-- Debug console (shows live console logs) -->
-<div id="debug-console"></div>
-
 <script>
 (function(){
 'use strict';
-
-// ══════════════════════════════════════════════════════════════════════════════
-//  DEBUG LOGGER — Captures console output and displays on-page for debugging
-// ══════════════════════════════════════════════════════════════════════════════
-const DebugLogger = {
-  console: null,
-  logs: [],
-  
-  init() {
-    this.console = document.getElementById('debug-console');
-    if (!this.console) return;
-    
-    // Override console methods to capture logs
-    const originalLog = console.log;
-    const originalError = console.error;
-    const originalWarn = console.warn;
-    
-    console.log = (...args) => {
-      originalLog.apply(console, args);
-      this.addLog('info', args);
-    };
-    
-    console.error = (...args) => {
-      originalError.apply(console, args);
-      this.addLog('error', args);
-    };
-    
-    console.warn = (...args) => {
-      originalWarn.apply(console, args);
-      this.addLog('warn', args);
-    };
-  },
-  
-  addLog(type, args) {
-    if (!this.console) return;
-    
-    const text = args.map(arg => {
-      if (typeof arg === 'object') {
-        try {
-          return JSON.stringify(arg, null, 2);
-        } catch(e) {
-          return String(arg);
-        }
-      }
-      return String(arg);
-    }).join(' ');
-    
-    const entry = document.createElement('div');
-    entry.className = `log-entry log-${type}`;
-    entry.textContent = `[${new Date().toISOString().substr(11,12)}] ${text}`;
-    
-    this.console.appendChild(entry);
-    this.console.scrollTop = this.console.scrollHeight;
-    this.console.classList.add('visible');
-    
-    // Keep only last 50 logs
-    while (this.console.children.length > 50) {
-      this.console.removeChild(this.console.firstChild);
-    }
-  }
-};
-
-// Initialize debug logger
-DebugLogger.init();
 
 // ══════════════════════════════════════════════════════════════════════════════
 //  TCTV — Tech & Click TV Player Core
