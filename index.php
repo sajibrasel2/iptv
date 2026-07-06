@@ -1269,12 +1269,33 @@ const TCTV = window.TCTV = {
     });
   },
 
+  // ── Real-time viewer tracker ────────────────────────────────────────────────
+  startViewerPing(){
+    // Send ping immediately
+    this.sendPing();
+    
+    // Then every 30 seconds
+    setInterval(() => {
+      this.sendPing();
+    }, 30000);
+  },
+
+  sendPing(){
+    fetch('ping.php', {
+      method: 'GET',
+      cache: 'no-cache'
+    }).catch(() => {
+      // Silent fail — don't disturb user experience
+    });
+  },
+
   // ── Init ────────────────────────────────────────────────────────────────────
   async init(){
     this.initControls();
     this.startViewerCounter();  // Start viewer count simulation
     this.initWelcomeListeners(); // Setup welcome popup event listeners
     this.showWelcome();          // Show welcome popup (once per session)
+    this.startViewerPing();      // Start real-time viewer tracking
 
     // WebView Detection logic — hide mobile app download button if already inside a WebView
     const ua = navigator.userAgent || navigator.vendor || window.opera;

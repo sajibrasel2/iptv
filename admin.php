@@ -186,6 +186,41 @@ label{font-size:12px;color:#64748b;display:block;margin-bottom:4px}
   </form>
 </h1>
 
+<?php
+// ── Real-time viewer count ────────────────────────────────────────────────────
+$activeViewers = 0;
+$dataFile = __DIR__ . '/active_users.json';
+if (file_exists($dataFile)) {
+    $raw = file_get_contents($dataFile);
+    $users = $raw ? json_decode($raw, true) : [];
+    if (is_array($users)) {
+        // Clean stale sessions (>60 seconds)
+        $now = time();
+        $users = array_filter($users, fn($ts) => ($now - $ts) <= 60);
+        $activeViewers = count($users);
+    }
+}
+?>
+
+<!-- Real-time viewer card -->
+<div class="card" style="background:linear-gradient(135deg,rgba(34,197,94,.12),rgba(16,185,129,.08));border-color:rgba(34,197,94,.3);margin-bottom:20px">
+  <div style="display:flex;align-items:center;gap:12px">
+    <div style="font-size:36px">🟢</div>
+    <div style="flex:1">
+      <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Real-Time Active Viewers</div>
+      <div style="font-size:32px;font-weight:800;color:#4ade80"><?= $activeViewers ?></div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:2px">🔄 Auto-refreshes every 10 seconds</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Auto-refresh viewer count every 10 seconds
+setInterval(() => {
+  location.reload();
+}, 10000);
+</script>
+
 <?php if ($msg): ?>
 <div class="msg"><?= $msg ?></div>
 <?php endif ?>
