@@ -457,6 +457,59 @@ body{
   max-width:480px;left:50%;transform:translateX(-50%) scale(1.08);
 }
 
+/* ── Welcome popup/modal ──────────────────────────────────────── */
+#welcome-overlay{
+  position:fixed;inset:0;z-index:9999;
+  background:rgba(0,0,0,.85);backdrop-filter:blur(8px);
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;pointer-events:none;
+  transition:opacity .35s ease-out;
+}
+#welcome-overlay.show{opacity:1;pointer-events:all}
+#welcome-modal{
+  background:linear-gradient(135deg,#1a1f35 0%,#0f1420 100%);
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:20px;
+  max-width:420px;width:calc(100% - 32px);
+  padding:28px 24px 24px;
+  position:relative;
+  box-shadow:0 20px 60px rgba(0,0,0,.6);
+  transform:scale(.92);
+  transition:transform .35s ease-out;
+}
+#welcome-overlay.show #welcome-modal{transform:scale(1)}
+#welcome-close{
+  position:absolute;top:12px;right:12px;
+  width:32px;height:32px;border-radius:50%;
+  background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.1);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;color:#94a3b8;font-size:18px;
+  transition:all .2s;
+}
+#welcome-close:hover{background:rgba(255,255,255,.15);color:#e2e8f0;transform:rotate(90deg)}
+#welcome-icon{
+  font-size:48px;text-align:center;margin-bottom:16px;
+  filter:drop-shadow(0 4px 12px rgba(59,130,246,.3));
+}
+#welcome-title{
+  font-size:20px;font-weight:800;color:#f1f5f9;
+  text-align:center;margin-bottom:12px;letter-spacing:-.02em;
+}
+#welcome-message{
+  font-size:14px;line-height:1.6;color:#cbd5e1;
+  text-align:center;margin-bottom:24px;
+}
+#welcome-button{
+  width:100%;padding:14px;border-radius:12px;
+  background:linear-gradient(135deg,#3b82f6,#6366f1);
+  border:none;color:#fff;font-size:14px;font-weight:700;
+  cursor:pointer;transition:all .2s;
+  box-shadow:0 4px 12px rgba(59,130,246,.3);
+}
+#welcome-button:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(59,130,246,.4)}
+#welcome-button:active{transform:scale(.98)}
+
 /* ── Announcement bar ────────────────────────────────────────── */
 #warn-bar{
   margin:0 12px 10px;padding:10px 14px;
@@ -484,6 +537,22 @@ body{
 </style>
 </head>
 <body>
+
+<!-- ── Welcome popup/modal ────────────────────────────────────── -->
+<div id="welcome-overlay">
+  <div id="welcome-modal">
+    <div id="welcome-close" onclick="TCTV.closeWelcome()">✕</div>
+    <div id="welcome-icon">📢</div>
+    <div id="welcome-title">Important Notice</div>
+    <div id="welcome-message">
+      If the stream appears offline or unavailable right now, please don't worry! 
+      Our live servers will automatically activate as soon as the match begins. 
+      Please stay tuned!
+    </div>
+    <button id="welcome-button" onclick="TCTV.closeWelcome()">Got it!</button>
+  </div>
+</div>
+
 <div id="bg-art"></div>
 
 <div id="app">
@@ -1144,10 +1213,60 @@ const TCTV = window.TCTV = {
     setTimeout(updateCount, 3000);
   },
 
+  // ── Welcome popup ───────────────────────────────────────────────────────────
+  showWelcome(){
+    // Check if already shown this session
+    if(sessionStorage.getItem('welcomeShown') === 'true') return;
+    
+    const overlay = document.getElementById('welcome-overlay');
+    if(!overlay) return;
+    
+    // Show popup after a short delay for smoother UX
+    setTimeout(() => {
+      overlay.classList.add('show');
+    }, 800);
+  },
+
+  closeWelcome(){
+    const overlay = document.getElementById('welcome-overlay');
+    if(!overlay) return;
+    
+    overlay.classList.remove('show');
+    
+    // Mark as shown for this session
+    sessionStorage.setItem('welcomeShown', 'true');
+    
+    // Remove from DOM after animation
+    setTimeout(() => {
+      overlay.style.display = 'none';
+    }, 400);
+  },
+
+  initWelcomeListeners(){
+    const overlay = document.getElementById('welcome-overlay');
+    if(!overlay) return;
+    
+    // Close when clicking outside the modal
+    overlay.addEventListener('click', (e) => {
+      if(e.target === overlay){
+        this.closeWelcome();
+      }
+    });
+    
+    // Close with Escape key
+    document.addEventListener('keydown', (e) => {
+      if(e.key === 'Escape' && overlay.classList.contains('show')){
+        this.closeWelcome();
+      }
+    });
+  },
+
   // ── Init ────────────────────────────────────────────────────────────────────
   async init(){
     this.initControls();
     this.startViewerCounter();  // Start viewer count simulation
+    this.initWelcomeListeners(); // Setup welcome popup event listeners
+    this.showWelcome();          // Show welcome popup (once per session)
 
     // WebView Detection logic — hide mobile app download button if already inside a WebView
     const ua = navigator.userAgent || navigator.vendor || window.opera;
