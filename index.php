@@ -1486,35 +1486,88 @@ const TCTV = window.TCTV = {
       return;  // Exit immediately - no ad logic
     }
     
+    // Detect mobile browser (NOT WebView, just mobile)
+    const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    
     // REGULAR BROWSER USERS: Smart popunder logic (two-click ad system)
     if(!this.welcomeAdClicked){
-      // FIRST ATTEMPT: Try to open random Adsterra URL in new tab
       const randomUrl = this.adsterraUrls[Math.floor(Math.random() * this.adsterraUrls.length)];
+      const welcomeButton = document.getElementById('welcome-button');
       
-      // Try to open in new tab
+      // MOBILE BROWSER: Show countdown notice before opening ad
+      if(isMobile && welcomeButton){
+        // Disable button during countdown
+        welcomeButton.disabled = true;
+        welcomeButton.style.opacity = '0.7';
+        welcomeButton.style.cursor = 'not-allowed';
+        
+        console.log('[Welcome Popup] Mobile browser detected - Starting 3-second countdown');
+        
+        // Original button text
+        const originalText = welcomeButton.textContent;
+        
+        // Countdown from 3 to 1
+        let countdown = 3;
+        welcomeButton.textContent = `Sponsor ad opening... Return to previous tab for stream (${countdown}s)`;
+        
+        const countdownInterval = setInterval(() => {
+          countdown--;
+          if(countdown > 0){
+            welcomeButton.textContent = `Sponsor ad opening... Return to previous tab for stream (${countdown}s)`;
+          } else {
+            clearInterval(countdownInterval);
+            
+            // Open ad after countdown
+            let adWindow = window.open(randomUrl, '_blank', 'noopener,noreferrer');
+            
+            // Check if window.open was blocked
+            if(!adWindow || adWindow.closed || typeof adWindow.closed === 'undefined'){
+              // POPUP BLOCKER: Close normally
+              console.log('[Welcome Popup] Popup blocker detected, closing normally');
+              overlay.classList.remove('show');
+              sessionStorage.setItem('welcomeShown', 'true');
+              setTimeout(() => {
+                overlay.style.display = 'none';
+              }, 400);
+              return;
+            }
+            
+            // SUCCESS: Ad opened, restore button
+            this.welcomeAdClicked = true;
+            welcomeButton.disabled = false;
+            welcomeButton.style.opacity = '1';
+            welcomeButton.style.cursor = 'pointer';
+            welcomeButton.textContent = originalText;
+            console.log('[Welcome Popup] Ad opened, click again to close');
+          }
+        }, 1000); // 1 second interval
+        
+        return;  // Exit - countdown handles the rest
+      }
+      
+      // DESKTOP BROWSER: Instant ad (no countdown needed)
+      console.log('[Welcome Popup] Desktop browser - Opening ad instantly');
       let adWindow = window.open(randomUrl, '_blank', 'noopener,noreferrer');
       
-      // Check if window.open was blocked (popup blockers)
+      // Check if window.open was blocked
       if(!adWindow || adWindow.closed || typeof adWindow.closed === 'undefined'){
-        // POPUP BLOCKER DETECTED: Close normally (graceful fallback)
+        // POPUP BLOCKER: Close normally
         console.log('[Welcome Popup] Popup blocker detected, closing normally');
         overlay.classList.remove('show');
         sessionStorage.setItem('welcomeShown', 'true');
-        
-        // Remove from DOM after animation
         setTimeout(() => {
           overlay.style.display = 'none';
         }, 400);
         return;
       }
       
-      // SUCCESS: New tab opened (regular browser), wait for second click
+      // SUCCESS: Ad opened, wait for second click
       this.welcomeAdClicked = true;
       console.log('[Welcome Popup] Ad opened in new tab, click again to close');
       return;  // Do NOT close the popup yet
     }
     
-    // SECOND ATTEMPT: Actually close the popup (regular browser users only)
+    // SECOND ATTEMPT: Actually close the popup (all users)
     overlay.classList.remove('show');
     
     // Mark as shown for this session
