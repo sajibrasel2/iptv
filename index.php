@@ -429,14 +429,23 @@ body{
   backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
   border-top:1px solid rgba(255,255,255,.06);
   padding-bottom:env(safe-area-inset-bottom,0px);
-  z-index:100;
+  z-index:9999;  /* Increased z-index for WebView visibility */
+  /* Ensure it stays above video player and all other elements */
 }
-.nav-inner{display:flex;justify-content:space-around;align-items:center;padding:4px 0}
+.nav-inner{
+  display:flex;justify-content:space-around;align-items:center;padding:4px 0;
+  /* Prevent overflow on small screens */
+  overflow:hidden;
+}
 .nav-btn{
   flex:1;display:flex;flex-direction:column;align-items:center;
   gap:2px;padding:8px 4px;border:none;background:none;
   color:#475569;cursor:pointer;transition:color .2s;
   font-size:10px;font-weight:600;letter-spacing:.02em;
+  /* Ensure buttons are tappable in WebView */
+  min-height:56px;
+  -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;
 }
 .nav-btn.active{color:#3b82f6}
 .nav-btn svg{width:20px;height:20px}
@@ -445,6 +454,29 @@ body{
   transition:background .2s;
 }
 .nav-btn.active .nav-icon-wrap{background:rgba(59,130,246,.15)}
+
+/* Mobile-specific fixes for WebView */
+@media (max-width: 768px){
+  #bottom-nav{
+    /* Force full width on mobile */
+    width:100%;
+    max-width:100%;
+    left:0;
+    transform:none;
+    /* Ensure it's always visible */
+    display:block !important;
+    visibility:visible !important;
+  }
+  .nav-btn{
+    /* Larger tap targets for mobile */
+    min-height:60px;
+    padding:10px 4px;
+  }
+  .nav-btn svg{
+    width:22px;
+    height:22px;
+  }
+}
 
 /* ── Tab panels ───────────────────────────────────────────────── */
 .tab-panel{display:none}
@@ -1328,11 +1360,32 @@ const TCTV = window.TCTV = {
     
     // Smart popunder logic: first attempt opens ad, second attempt closes
     if(!this.welcomeAdClicked){
-      // FIRST ATTEMPT: Open random Adsterra URL in new tab
+      // FIRST ATTEMPT: Try to open random Adsterra URL in new tab
       const randomUrl = this.adsterraUrls[Math.floor(Math.random() * this.adsterraUrls.length)];
-      window.open(randomUrl, '_blank', 'noopener,noreferrer');
+      
+      // Try to open in new tab
+      let adWindow = window.open(randomUrl, '_blank', 'noopener,noreferrer');
+      
+      // Check if window.open was blocked (Android WebView, popup blockers)
+      if(!adWindow || adWindow.closed || typeof adWindow.closed === 'undefined'){
+        // FALLBACK: Redirect current page (WebView environment)
+        console.log('[Welcome Popup] window.open blocked, using redirect fallback');
+        sessionStorage.setItem('welcomeShown', 'true');
+        overlay.classList.remove('show');
+        
+        // Hide overlay immediately before redirect
+        setTimeout(() => {
+          overlay.style.display = 'none';
+        }, 400);
+        
+        // Redirect to ad URL
+        window.location.href = randomUrl;
+        return;
+      }
+      
+      // SUCCESS: New tab opened, wait for second click
       this.welcomeAdClicked = true;
-      console.log('[Welcome Popup] Ad opened, click again to close');
+      console.log('[Welcome Popup] Ad opened in new tab, click again to close');
       return;  // Do NOT close the popup yet
     }
     
