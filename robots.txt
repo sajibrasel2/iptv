@@ -1,0 +1,49 @@
+# robots.txt for Tech & Click TV - TCTV Live Sports Streaming
+# https://techandclick.site/iptv/
+
+User-agent: *
+Allow: /
+
+# Disallow admin and config files
+Disallow: /admin.php
+Disallow: /install_db.php
+Disallow: /setup_prediction_db.php
+Disallow: /config.php
+Disallow: /.env.php
+
+# Disallow cache and temporary files
+Disallow: /links_cache.json
+Disallow: /active_users.json
+Disallow: /m3u8_cache/
+
+# Allow important resources
+Allow: /index.php
+Allow: /stream.php
+Allow: /proxy.php
+Allow: /ping.php
+Allow: /*.css
+Allow: /*.js
+Allow: /*.png
+Allow: /*.jpg
+Allow: /*.jpeg
+Allow: /*.gif
+Allow: /*.webp
+Allow: /*.svg
+Allow: /manifest.json
+Allow: /sw.js
+
+# Sitemap location
+Sitemap: https://techandclick.site/iptv/sitemap.xml
+
+# Crawl-delay for polite bots (optional)
+# Crawl-delay: 1
+
+# Block bad bots (optional - uncomment if needed)
+# User-agent: AhrefsBot
+# Disallow: /
+
+# User-agent: SemrushBot
+# Disallow: /
+
+# User-agent: MJ12bot
+# Disallow: /
