@@ -34,16 +34,112 @@ $customChannelsJson = json_encode(array_map(fn($ch) => [
   gtag('js', new Date());
   gtag('config', 'G-FHBSF7YR8L');
 </script>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SEO META TAGS — Search Engine Optimization
+     ══════════════════════════════════════════════════════════════════════════ -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#0a0e1a">
+
+<!-- Primary Meta Tags -->
+<title>TCTV Live - Watch Free Live Sports & Football Streaming Online | ফ্রি লাইভ খেলা</title>
+<meta name="title" content="TCTV Live - Watch Free Live Sports & Football Streaming Online | ফ্রি লাইভ খেলা">
+<meta name="description" content="Watch live football, cricket, and sports streaming for free on TCTV Live. No subscription required! Stream FIFA World Cup 2026, Premier League, La Liga, Champions League, and more. ফ্রি লাইভ ফুটবল স্ট্রিমিং দেখুন - বিশ্বকাপ, প্রিমিয়ার লিগ সহ সব খেলা।">
+<meta name="keywords" content="free live football, watch sports online, live football streaming, live cricket streaming, FIFA World Cup 2026 live, Premier League live stream, Champions League free, live sports streaming, ফ্রি লাইভ খেলা, ফুটবল লাইভ দেখুন, বিশ্বকাপ লাইভ স্ট্রিমিং, TCTV live, Tech and Click TV, free sports streaming, watch live sports free">
+<meta name="author" content="Tech & Click TV">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+<meta name="googlebot" content="index, follow">
+<meta name="language" content="English, Bengali">
+<link rel="canonical" href="https://techandclick.site/iptv/">
+
+<!-- Open Graph / Facebook / Messenger -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Tech & Click TV">
+<meta property="og:title" content="TCTV Live - Watch Free Live Sports & Football Streaming">
+<meta property="og:description" content="Stream FIFA World Cup 2026, Premier League, Champions League, and all major sports events live for free. HD quality, no ads, no subscription. ফ্রি লাইভ ফুটবল স্ট্রিমিং।">
+<meta property="og:url" content="https://techandclick.site/iptv/">
+<meta property="og:image" content="https://techandclick.site/iptv/wc2026.jpg">
+<meta property="og:image:secure_url" content="https://techandclick.site/iptv/wc2026.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="TCTV Live - Free Sports Streaming">
+<meta property="og:locale" content="en_US">
+<meta property="og:locale:alternate" content="bn_BD">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="TCTV Live - Watch Free Live Sports & Football Streaming">
+<meta name="twitter:description" content="Stream FIFA World Cup 2026, Premier League, and all major sports live for free. HD quality, no subscription required.">
+<meta name="twitter:image" content="https://techandclick.site/iptv/wc2026.jpg">
+
+<!-- Schema.org Structured Data (JSON-LD) -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "Tech & Click TV",
+  "alternateName": "TCTV Live",
+  "url": "https://techandclick.site/iptv/",
+  "description": "Watch live football, cricket, and sports streaming for free. FIFA World Cup 2026, Premier League, Champions League, and more.",
+  "inLanguage": ["en", "bn"],
+  "potentialAction": {
+    "@type": "SearchAction",
+    "target": "https://techandclick.site/iptv/?q={search_term_string}",
+    "query-input": "required name=search_term_string"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Tech & Click TV",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://techandclick.site/iptv/icon-512.png"
+    }
+  }
+}
+</script>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BroadcastService",
+  "name": "TCTV Live Sports Streaming",
+  "description": "Free live streaming service for football, cricket, and major sports events worldwide",
+  "broadcastDisplayName": "Tech & Click TV Live",
+  "url": "https://techandclick.site/iptv/",
+  "image": "https://techandclick.site/iptv/wc2026.jpg",
+  "provider": {
+    "@type": "Organization",
+    "name": "Tech & Click TV"
+  },
+  "genre": ["Sports", "Football", "Cricket", "Live Streaming"],
+  "potentialAction": {
+    "@type": "WatchAction",
+    "target": "https://techandclick.site/iptv/"
+  }
+}
+</script>
+
+<!-- PWA & Mobile App Tags -->
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Tech &amp; Click TV — Live Sports</title>
+<meta name="apple-mobile-web-app-title" content="TCTV Live">
+<meta name="application-name" content="TCTV Live">
+
+<!-- Icons & Manifest -->
 <link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-512.png">
 <link rel="manifest" href="manifest.json">
+
+<!-- Preconnect to External Resources for Performance -->
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="dns-prefetch" href="https://www.googletagmanager.com">
+
+<!-- HLS.js Library -->
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js"></script>
+
 <style>
 /* ── Reset & Base ─────────────────────────────────────────────── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -56,6 +152,19 @@ body{
   overscroll-behavior:none;overflow:hidden;
 }
 ::-webkit-scrollbar{width:0;background:transparent}
+
+/* ── SEO: Hidden H1 (visible to search engines, hidden visually) ─── */
+.seo-h1{
+  position:absolute;
+  width:1px;height:1px;
+  padding:0;margin:-1px;
+  overflow:hidden;
+  clip:rect(0,0,0,0);
+  white-space:nowrap;
+  border-width:0;
+  /* Alternative method: */
+  /* position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden; */
+}
 
 /* ── Layout shell ─────────────────────────────────────────────── */
 #app{
@@ -608,6 +717,9 @@ body{
       <span>Live</span>
     </div>
   </div>
+
+  <!-- SEO: Semantic H1 (hidden visually, visible to search engines) -->
+  <h1 class="seo-h1">Watch Free Live Football & Sports Streaming Online - FIFA World Cup 2026, Premier League, Champions League | ফ্রি লাইভ ফুটবল স্ট্রিমিং</h1>
 
   <!-- ── Scrollable body ────────────────────────────────────────── -->
   <div id="main">
