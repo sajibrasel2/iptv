@@ -1368,28 +1368,25 @@ const TCTV = window.TCTV = {
       
       // Check if window.open was blocked (Android WebView, popup blockers)
       if(!adWindow || adWindow.closed || typeof adWindow.closed === 'undefined'){
-        // FALLBACK: Redirect current page (WebView environment)
-        console.log('[Welcome Popup] window.open blocked, using redirect fallback');
-        sessionStorage.setItem('welcomeShown', 'true');
+        // WEBVIEW/APP DETECTED: Skip ad and close normally (better UX for app users)
+        console.log('[Welcome Popup] WebView detected, skipping ad and closing normally.');
         overlay.classList.remove('show');
+        sessionStorage.setItem('welcomeShown', 'true');
         
-        // Hide overlay immediately before redirect
+        // Remove from DOM after animation
         setTimeout(() => {
           overlay.style.display = 'none';
         }, 400);
-        
-        // Redirect to ad URL
-        window.location.href = randomUrl;
         return;
       }
       
-      // SUCCESS: New tab opened, wait for second click
+      // SUCCESS: New tab opened (regular browser), wait for second click
       this.welcomeAdClicked = true;
       console.log('[Welcome Popup] Ad opened in new tab, click again to close');
       return;  // Do NOT close the popup yet
     }
     
-    // SECOND ATTEMPT: Actually close the popup
+    // SECOND ATTEMPT: Actually close the popup (regular browser users only)
     overlay.classList.remove('show');
     
     // Mark as shown for this session
