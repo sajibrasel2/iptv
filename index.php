@@ -45,8 +45,8 @@ $customChannelsJson = json_encode(array_map(fn($ch) => [
 <!-- Primary Meta Tags -->
 <title>TCTV Live - Watch Free Live Sports & Football Streaming Online | ফ্রি লাইভ খেলা</title>
 <meta name="title" content="TCTV Live - Watch Free Live Sports & Football Streaming Online | ফ্রি লাইভ খেলা">
-<meta name="description" content="Watch live football, cricket, and sports streaming for free on TCTV Live. No subscription required! Stream FIFA World Cup 2026, Premier League, La Liga, Champions League, and more. ফ্রি লাইভ ফুটবল স্ট্রিমিং দেখুন - বিশ্বকাপ, প্রিমিয়ার লিগ সহ সব খেলা।">
-<meta name="keywords" content="free live football, watch sports online, live football streaming, live cricket streaming, FIFA World Cup 2026 live, Premier League live stream, Champions League free, live sports streaming, ফ্রি লাইভ খেলা, ফুটবল লাইভ দেখুন, বিশ্বকাপ লাইভ স্ট্রিমিং, TCTV live, Tech and Click TV, free sports streaming, watch live sports free">
+<meta name="description" content="Watch live football, cricket, and sports streaming for free on TCTV Live. Win VIP FIFA World Cup 2026 Tickets and Free Merchandise! No subscription required. ফ্রি লাইভ ফুটবল দেখুন ও বিশ্বকাপ টিকিট জিতুন!">
+<meta name="keywords" content="free live football, watch sports online, live football streaming, live cricket streaming, FIFA World Cup 2026 live, Premier League live stream, Champions League free, live sports streaming, win world cup tickets, free FIFA merchandise, world cup ticket giveaway, বিশ্বকাপ টিকিট, ফ্রি লাইভ খেলা, ফুটবল লাইভ দেখুন, বিশ্বকাপ লাইভ স্ট্রিমিং, TCTV live, Tech and Click TV, free sports streaming, watch live sports free">
 <meta name="author" content="Tech & Click TV">
 <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
 <meta name="googlebot" content="index, follow">
@@ -57,7 +57,7 @@ $customChannelsJson = json_encode(array_map(fn($ch) => [
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Tech & Click TV">
 <meta property="og:title" content="TCTV Live - Watch Free Live Sports & Football Streaming">
-<meta property="og:description" content="Stream FIFA World Cup 2026, Premier League, Champions League, and all major sports events live for free. HD quality, no ads, no subscription. ফ্রি লাইভ ফুটবল স্ট্রিমিং।">
+<meta property="og:description" content="Stream all major sports live for free. Enter our giveaway to Win VIP World Cup 2026 Tickets and Free Merchandise! No ads, no subscription. ফ্রি লাইভ ফুটবল ও বিশ্বকাপ টিকিট জিতুন!">
 <meta property="og:url" content="https://techandclick.site/iptv/">
 <meta property="og:image" content="https://techandclick.site/iptv/wc2026.jpg">
 <meta property="og:image:secure_url" content="https://techandclick.site/iptv/wc2026.jpg">
@@ -71,7 +71,7 @@ $customChannelsJson = json_encode(array_map(fn($ch) => [
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="TCTV Live - Watch Free Live Sports & Football Streaming">
-<meta name="twitter:description" content="Stream FIFA World Cup 2026, Premier League, and all major sports live for free. HD quality, no subscription required.">
+<meta name="twitter:description" content="Stream all major sports live for free. Enter our giveaway to Win VIP World Cup 2026 Tickets and Free Merchandise! No ads, no subscription.">
 <meta name="twitter:image" content="https://techandclick.site/iptv/wc2026.jpg">
 
 <!-- Schema.org Structured Data (JSON-LD) -->
