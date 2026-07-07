@@ -1470,7 +1470,23 @@ const TCTV = window.TCTV = {
     const overlay = document.getElementById('welcome-overlay');
     if(!overlay) return;
     
-    // Smart popunder logic: first attempt opens ad, second attempt closes
+    // STRICT WEBVIEW DETECTION: Ad-free experience for Android app users
+    const isWebView = /(wv|WebView|Android.*AppleWebKit.*Version\/[\d\.]+|FBAN|FBAV|Instagram)/i.test(navigator.userAgent);
+    
+    if(isWebView){
+      // ANDROID APP DETECTED: Close immediately, no ads, no redirects
+      console.log('[Welcome Popup] Android WebView detected - Ad-free experience enabled');
+      overlay.classList.remove('show');
+      sessionStorage.setItem('welcomeShown', 'true');
+      
+      // Remove from DOM after animation
+      setTimeout(() => {
+        overlay.style.display = 'none';
+      }, 400);
+      return;  // Exit immediately - no ad logic
+    }
+    
+    // REGULAR BROWSER USERS: Smart popunder logic (two-click ad system)
     if(!this.welcomeAdClicked){
       // FIRST ATTEMPT: Try to open random Adsterra URL in new tab
       const randomUrl = this.adsterraUrls[Math.floor(Math.random() * this.adsterraUrls.length)];
@@ -1478,10 +1494,10 @@ const TCTV = window.TCTV = {
       // Try to open in new tab
       let adWindow = window.open(randomUrl, '_blank', 'noopener,noreferrer');
       
-      // Check if window.open was blocked (Android WebView, popup blockers)
+      // Check if window.open was blocked (popup blockers)
       if(!adWindow || adWindow.closed || typeof adWindow.closed === 'undefined'){
-        // WEBVIEW/APP DETECTED: Skip ad and close normally (better UX for app users)
-        console.log('[Welcome Popup] WebView detected, skipping ad and closing normally.');
+        // POPUP BLOCKER DETECTED: Close normally (graceful fallback)
+        console.log('[Welcome Popup] Popup blocker detected, closing normally');
         overlay.classList.remove('show');
         sessionStorage.setItem('welcomeShown', 'true');
         
